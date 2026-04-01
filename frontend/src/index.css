@@ -1,0 +1,67 @@
+html,
+body,
+#root {
+  margin: 0;
+  width: 100%;
+  height: 100%;
+  font-family: Inter, Arial, sans-serif;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+.ql-toolbar.ql-snow {
+  border: none !important;
+  border-bottom: 1px solid #e5e7eb !important;
+  background: #ffffff;
+}
+
+.ql-container.ql-snow {
+  border: none !important;
+  font-size: 16px;
+}
+
+.ql-editor {
+  min-height: 160px;
+  color: #0f172a;
+  line-height: 1.6;
+}
+
+.ql-editor h1,
+.ql-editor h2,
+.ql-editor h3 {
+  margin-top: 0.4em;
+}
+
+.ql-editor ul,
+.ql-editor ol {
+  padding-left: 1.4em;
+}
+
+/* Roman numerals */
+.ql-editor .roman-list {
+  list-style-type: upper-roman;
+  padding-left: 1.6em;
+}
+
+/* Checklist */
+.ql-editor .checklist {
+  list-style: none;
+  padding-left: 0;
+}
+
+.ql-editor .checklist li {
+  position: relative;
+  padding-left: 1.8em;
+  margin: 6px 0;
+}
+
+.ql-editor .checklist li::before {
+  content: "☐";
+  position: absolute;
+  left: 0;
+  top: 0;
+  color: #334155;
+  font-size: 1em;
+}

@@ -1,0 +1,33 @@
+version: '3.8'
+
+services:
+  # MySQL for User Authentication and Sessions
+  mysql:
+    image: mysql:8.0
+    container_name: collab_mysql
+    restart: always
+    environment:
+      MYSQL_ROOT_PASSWORD: mysecretpassword
+      MYSQL_DATABASE: collabspace_users
+    ports:
+      - "3306:3306"
+    volumes:
+      - mysql_data:/var/lib/mysql
+
+  # MongoDB for Boards, Canvas and Realtime Documents
+  mongodb:
+    image: mongo:latest
+    container_name: collab_mongo
+    restart: always
+    environment:
+      MONGO_INITDB_ROOT_USERNAME: root
+      MONGO_INITDB_ROOT_PASSWORD: mysecretpassword
+      MONGO_INITDB_DATABASE: collabspace_boards
+    ports:
+      - "27017:27017"
+    volumes:
+      - mongo_data:/data/db
+
+volumes:
+  mysql_data:
+  mongo_data:
