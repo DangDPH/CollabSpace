@@ -2,6 +2,7 @@ import { useMemo, useRef, useState, useEffect } from "react";
 import ReactQuill from "react-quill";
 import "react-quill/dist/quill.snow.css";
 import { fetchDocument, saveDocument } from '../../api/boards';
+import { useSocket } from '../../context/SocketContext';
 
 const DEFAULT_CONTENT = `
   <h1>Project Notes</h1>
@@ -18,13 +19,16 @@ function DocumentEditor({ boardId }) {
   const [content, setContent] = useState("");
   const saveTimeoutRef = useRef(null);
   const isLoadedRef = useRef(false);
+  const isRemoteUpdateRef = useRef(false); // Prevent echo loops
 
+  const { socket } = useSocket();
+
+  // Fetch initial document from backend
   useEffect(() => {
     if (boardId) {
       fetchDocument(boardId)
         .then(html => {
           setContent(html || DEFAULT_CONTENT);
-          // Wait a tick before marking loaded to prevent immediate auto-save from setContent
           setTimeout(() => { isLoadedRef.current = true; }, 100);
         })
         .catch(err => {
@@ -34,6 +38,25 @@ function DocumentEditor({ boardId }) {
         });
     }
   }, [boardId]);
+
+  // Listen for real-time document updates from other users
+  useEffect(() => {
+    if (!socket) return;
+
+    const handleTextUpdate = (data) => {
+      const { payload } = data;
+      if (!payload || !payload.html) return;
+
+      // Mark as remote update so onChange doesn't re-broadcast
+      isRemoteUpdateRef.current = true;
+      setContent(payload.html);
+      // Reset the flag after React processes the state update
+      setTimeout(() => { isRemoteUpdateRef.current = false; }, 50);
+    };
+
+    socket.on('text_update', handleTextUpdate);
+    return () => { socket.off('text_update', handleTextUpdate); };
+  }, [socket]);
 
   const modules = useMemo(
     () => ({
@@ -67,7 +90,24 @@ function DocumentEditor({ boardId }) {
     setContent(next);
     
     if (!isLoadedRef.current) return;
+    // Don't re-broadcast if this change came from another user
+    if (isRemoteUpdateRef.current) return;
 
+    // Emit to other users instantly via socket
+    if (socket && boardId) {
+      socket.emit('text_update', {
+        board_id: boardId,
+        user_id: 'local',
+        payload: {
+          doc_id: boardId,
+          html: next,
+          ops: [], // simplified — we send full HTML instead of OT ops
+          version: Date.now(),
+        }
+      });
+    }
+
+    // Debounced save to database
     if (saveTimeoutRef.current) clearTimeout(saveTimeoutRef.current);
     saveTimeoutRef.current = setTimeout(async () => {
       if (boardId) {

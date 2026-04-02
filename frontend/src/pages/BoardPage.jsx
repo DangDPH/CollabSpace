@@ -3,6 +3,8 @@ import { useParams, useNavigate } from 'react-router-dom';
 import '../board_bias_styles.css';
 
 import { fetchBoardMetadata } from '../api/boards';
+import { useAuth } from '../context/AuthContext';
+import { SocketProvider } from '../context/SocketContext';
 
 import Whiteboard from '../components/canvasUI/canvas/white_board';
 import DocumentEditor from '../components/textEditor/TextEditor';
@@ -15,6 +17,9 @@ const ErrorFallback = ({ children }) => <>{children}</>;
 export default function BoardPage() {
   const { id } = useParams();
   const navigate = useNavigate();
+  const { user } = useAuth();
+  const userId = user?.id || user?._id || 'anonymous';
+  const username = user?.username || 'Guest';
 
   const [mode, setMode] = useState(
     localStorage.getItem("workspace-mode") || "split"
@@ -25,6 +30,14 @@ export default function BoardPage() {
   });
   const [isDragging, setIsDragging] = useState(false);
   const [boardName, setBoardName] = useState("Loading...");
+  const [showShareTooltip, setShowShareTooltip] = useState(false);
+
+  const handleShare = () => {
+    const url = window.location.href;
+    navigator.clipboard.writeText(url);
+    setShowShareTooltip(true);
+    setTimeout(() => setShowShareTooltip(false), 2000);
+  };
 
   useEffect(() => {
     async function loadMetadata() {
@@ -71,6 +84,7 @@ export default function BoardPage() {
   }, [isDragging, mode]);
 
   return (
+    <SocketProvider boardId={id} userId={String(userId)} username={username}>
     <div style={styles.page}>
       <div style={styles.topbar}>
         <div style={styles.logo}>{boardName}</div>
@@ -100,12 +114,21 @@ export default function BoardPage() {
           </div>
         </div>
         
-        <button 
-          style={{...styles.button, border: '1px solid #ff4d4f', color: '#ff4d4f'}}
-          onClick={() => navigate('/dashboard')}
-        >
-          Back to Dashboard
-        </button>
+        <div style={{ display: 'flex', gap: 8, position: 'relative' }}>
+          <button 
+            style={{...styles.button, border: '1px solid #0f62fe', color: '#0f62fe'}}
+            onClick={handleShare}
+          >
+            {showShareTooltip ? '✅ Copied!' : '🔗 Share'}
+          </button>
+
+          <button 
+            style={{...styles.button, border: '1px solid #ff4d4f', color: '#ff4d4f'}}
+            onClick={() => navigate('/dashboard')}
+          >
+            Back to Dashboard
+          </button>
+        </div>
       </div>
 
       <div style={styles.content}>
@@ -152,6 +175,7 @@ export default function BoardPage() {
       <ChatBox />
       <VoiceBox />
     </div>
+    </SocketProvider>
   );
 }
 

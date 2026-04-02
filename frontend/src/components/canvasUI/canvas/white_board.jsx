@@ -4,34 +4,9 @@ import { v4 as uuidv4 } from 'uuid';
 import ShapeRenderer from './shape_renderer';
 import ShapeSelector from './shapes/Shape_Selector';
 
-import io from 'socket.io-client';
 import { fetchCanvas, saveCanvas } from '../../../api/boards';
+import { useSocket } from '../../../context/SocketContext';
 
-let socket = null;
-try {
-  socket = io('http://localhost:4000', { 
-    reconnectionDelay: 1000, 
-    reconnection: true,
-    reconnectionAttempts: 5,
-    reconnectionDelayMax: 5000,
-    transports: ['websocket', 'polling']
-  });
-  
-  socket.on('connect', () => {
-    console.log('✅ Socket.io connected to backend:', socket.id);
-  });
-  
-  socket.on('connect_error', (error) => {
-    console.warn('⚠️ Socket.io connection error (backend may not be running):', error.message);
-  });
-  
-  socket.on('disconnect', (reason) => {
-    console.warn('⚠️ Socket.io disconnected:', reason);
-  });
-} catch (err) {
-  console.warn('⚠️ Socket.io init error (backend unavailable):', err.message);
-  socket = null;
-}
 
 const Whiteboard = ({ boardId }) => {
   const [showToolbar, setShowToolbar] = useState(true); // Toggle toolbar visibility
@@ -104,31 +79,46 @@ const Whiteboard = ({ boardId }) => {
     }
   }, [boardId]);
 
+  // Get the shared socket from context
+  const { socket } = useSocket();
+
   useEffect(() => {
-    if (!socket) return; // Skip if socket not initialized
+    if (!socket) return;
     
-    // Fetch initial shapes from the server when the component mounts
-    socket.on('receive-shape', (incomingShape) => {
-      setShapes((prev) => {
-        const index = prev.findIndex((s) => s.id === incomingShape.id);
-        if (index > -1) {
-          // if shape already exists, update it
-          const newShapes = [...prev];
-          newShapes[index] = incomingShape;
-          return newShapes;
+    // Listen for canvas updates from other users
+    const handleCanvasUpdate = (data) => {
+      const { payload } = data;
+      if (!payload) return;
+
+      if (payload.op === 'add_shape' || payload.op === 'update_shape') {
+        const incomingShape = payload.data;
+        setShapes((prev) => {
+          const index = prev.findIndex((s) => s.id === incomingShape.id);
+          if (index > -1) {
+            const newShapes = [...prev];
+            newShapes[index] = incomingShape;
+            return newShapes;
+          }
+          return [...prev, incomingShape];
+        });
+      } else if (payload.op === 'delete_shape') {
+        setShapes((prev) => prev.filter((s) => s.id !== payload.object_id));
+      } else if (payload.op === 'clear_all') {
+        setShapes([]);
+      } else if (payload.op === 'full_sync') {
+        // Full state replacement (e.g. after drawing a freehand line)
+        if (Array.isArray(payload.data)) {
+          setShapes(payload.data);
         }
-        // if shape is new, add it to the list
-        return [...prev, incomingShape];
-      });
-    });
+      }
+    };
 
-    // fetch initial shapes from the server when the component mounts
-    socket.on('delete-shape', (deletedId) => {
-      setShapes((prev) => prev.filter((s) => s.id !== deletedId));
-    });
+    socket.on('canvas_update', handleCanvasUpdate);
 
-    return () => socket.off(); // cleanup listeners on unmount
-  }, []);
+    return () => {
+      socket.off('canvas_update', handleCanvasUpdate);
+    };
+  }, [socket]);
   
   // Map pan state
   const [stagePosition, setStagePosition] = useState({ x: 0, y: 0 });
@@ -210,8 +200,14 @@ const Whiteboard = ({ boardId }) => {
 
     const updatedShapes = [...shapes, newShape];
     setShapes(updatedShapes);
-    commitToHistory(updatedShapes); // Lưu vào lịch sử để Undo được
-    if (socket) socket.emit('send-shape', newShape);
+    commitToHistory(updatedShapes);
+    if (socket) {
+      socket.emit('canvas_update', {
+        board_id: boardId,
+        user_id: 'local',
+        payload: { op: 'add_shape', object_id: newShape.id, data: newShape }
+      });
+    }
     
     setMode('select'); 
     setSelectedId(newShape.id);
@@ -222,6 +218,13 @@ const Whiteboard = ({ boardId }) => {
       setShapes([]);
       commitToHistory([]);
       setSelectedId(null);
+      if (socket) {
+        socket.emit('canvas_update', {
+          board_id: boardId,
+          user_id: 'local',
+          payload: { op: 'clear_all' }
+        });
+      }
     }
   };
 
@@ -298,7 +301,15 @@ const Whiteboard = ({ boardId }) => {
     }
     if (isDrawing.current) {
       isDrawing.current = false;
-      commitToHistory(shapes); // Lưu lại nét vẽ vào lịch sử khi nhả chuột
+      commitToHistory(shapes);
+      // Broadcast the full shapes after freehand drawing completes
+      if (socket) {
+        socket.emit('canvas_update', {
+          board_id: boardId,
+          user_id: 'local',
+          payload: { op: 'full_sync', data: shapes }
+        });
+      }
     }
   };
 
@@ -312,7 +323,13 @@ const Whiteboard = ({ boardId }) => {
       commitToHistory(newShapes);
 
       // Emit the updated shape to the server
-      if (socket) socket.emit('send-shape', updatedShape);
+      if (socket) {
+        socket.emit('canvas_update', {
+          board_id: boardId,
+          user_id: 'local',
+          payload: { op: 'update_shape', object_id: updatedShape.id, data: updatedShape }
+        });
+      }
     }
   };
 
@@ -720,7 +737,13 @@ const Whiteboard = ({ boardId }) => {
                   setShapes(newShapes);
                   commitToHistory(newShapes);
 
-                  if (socket) socket.emit('send-shape', snappedAttrs); // Send updated shape to server
+                  if (socket) {
+                    socket.emit('canvas_update', {
+                      board_id: boardId,
+                      user_id: 'local',
+                      payload: { op: 'update_shape', object_id: snappedAttrs.id, data: snappedAttrs }
+                    });
+                  }
                 }}
               />
             ))}

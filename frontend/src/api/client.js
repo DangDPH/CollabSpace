@@ -5,7 +5,8 @@
  */
 import axios from 'axios';
 
-const API_BASE = import.meta.env.VITE_API_URL || 'http://localhost:8000';
+// We now use Vite Proxy to bypass Windows Firewall for external devices.
+const API_BASE = import.meta.env.VITE_API_URL || '';
 
 const client = axios.create({
   baseURL: API_BASE,

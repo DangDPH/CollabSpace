@@ -1,9 +1,12 @@
 import { useState, useRef, useEffect } from "react";
+import { useSocket } from "../context/SocketContext";
 
 export default function ChatBox() {
   const [isOpen, setIsOpen] = useState(false);
   const [messages, setMessages] = useState([]);
   const [input, setInput] = useState("");
+
+  const { socket, boardId, userId, username } = useSocket();
 
   const [position, setPosition] = useState({ x: 0, y: 0 });
 
@@ -22,25 +25,48 @@ export default function ChatBox() {
 
   const endRef = useRef(null);
 
-  const formatTime = () => {
-    const now = new Date();
-    return now.toLocaleTimeString([], {
-      hour: "2-digit",
-      minute: "2-digit"
-    });
-  };
+  // Listen for incoming chat messages from the server
+  useEffect(() => {
+    if (!socket) return;
 
-  const sendMessage = () => {
-    if (!input.trim()) return;
-
-    const newMsg = {
-      id: Date.now(),
-      text: input,
-      user: "me",
-      time: formatTime()
+    const handleReceiveMessage = (data) => {
+      const { user_id, payload } = data;
+      const msg = {
+        id: payload.message_id || Date.now(),
+        text: payload.text,
+        user: user_id === userId ? "me" : "other",
+        username: payload.username || user_id,
+        time: new Date(payload.sent_at).toLocaleTimeString([], {
+          hour: "2-digit",
+          minute: "2-digit"
+        }),
+      };
+      setMessages((prev) => {
+        // Deduplicate by message_id
+        if (prev.find(m => m.id === msg.id)) return prev;
+        return [...prev, msg];
+      });
     };
 
-    setMessages((prev) => [...prev, newMsg]);
+    socket.on('receive_message', handleReceiveMessage);
+    return () => { socket.off('receive_message', handleReceiveMessage); };
+  }, [socket, userId]);
+
+  const sendMessage = () => {
+    if (!input.trim() || !socket) return;
+
+    const messageId = `${userId}-${Date.now()}`;
+
+    socket.emit('send_message', {
+      board_id: boardId,
+      user_id: userId,
+      payload: {
+        message_id: messageId,
+        text: input,
+        username: username,
+      }
+    });
+
     setInput("");
   };
 
@@ -106,8 +132,18 @@ export default function ChatBox() {
           </div>
 
           <div className="chat-body">
+            {messages.length === 0 && (
+              <div style={{ textAlign: 'center', color: '#94a3b8', padding: '20px', fontSize: 13 }}>
+                No messages yet. Say hello! 👋
+              </div>
+            )}
             {messages.map((msg) => (
               <div key={msg.id} className={`msg ${msg.user}`}>
+                {msg.user === "other" && (
+                  <div style={{ fontSize: 11, color: '#0f62fe', fontWeight: 600, marginBottom: 2 }}>
+                    {msg.username}
+                  </div>
+                )}
                 <div className="msg-text">{msg.text}</div>
                 <div className="msg-time">{msg.time}</div>
               </div>
@@ -115,7 +151,7 @@ export default function ChatBox() {
             <div ref={endRef} />
           </div>
 
-          {/* 💬 INPUT KIỂU MESSENGER */}
+          {/* 💬 INPUT */}
           <div className="chat-input">
             <input
               value={input}
