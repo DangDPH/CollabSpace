@@ -21,3 +21,26 @@ export async function createBoard({ name, color }) {
 export async function deleteBoard(boardId) {
   await client.delete(`/api/v1/boards/${boardId}`);
 }
+
+export async function fetchBoardMetadata(boardId) {
+  const res = await client.get(`/api/v1/boards/${boardId}`);
+  return res.data;
+}
+
+export async function fetchCanvas(boardId) {
+  const res = await client.get(`/api/v1/boards/${boardId}/canvas`);
+  return res.data.elements || [];
+}
+
+export async function saveCanvas(boardId, elements) {
+  await client.put(`/api/v1/boards/${boardId}/canvas`, { elements });
+}
+
+export async function fetchDocument(boardId) {
+  const res = await client.get(`/api/v1/boards/${boardId}/document`);
+  return res.data.html || '';
+}
+
+export async function saveDocument(boardId, html) {
+  await client.put(`/api/v1/boards/${boardId}/document`, { html });
+}

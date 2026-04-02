@@ -42,6 +42,14 @@ class CanvasElement(BaseModel):
     y: float
     properties: Dict[str, Any] = {}
 
+class CanvasSaveRequest(BaseModel):
+    """Payload to save the entire canvas."""
+    elements: List[Dict[str, Any]] = Field(..., description="Array of drawing objects")
+
+class DocumentSaveRequest(BaseModel):
+    """Payload to save the rich text document."""
+    html: str = Field(..., description="The HTML content of the document")
+
 # ==========================================
 # OUTPUT SCHEMAS (Data going TO the frontend)
 # ==========================================

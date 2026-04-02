@@ -2,6 +2,8 @@ import { useEffect, useState } from "react";
 import { useParams, useNavigate } from 'react-router-dom';
 import '../board_bias_styles.css';
 
+import { fetchBoardMetadata } from '../api/boards';
+
 import Whiteboard from '../components/canvasUI/canvas/white_board';
 import DocumentEditor from '../components/textEditor/TextEditor';
 import ChatBox from '../components/ChatBox';
@@ -22,6 +24,20 @@ export default function BoardPage() {
     return saved ? Number(saved) : window.innerWidth * 0.5;
   });
   const [isDragging, setIsDragging] = useState(false);
+  const [boardName, setBoardName] = useState("Loading...");
+
+  useEffect(() => {
+    async function loadMetadata() {
+      try {
+        const data = await fetchBoardMetadata(id);
+        setBoardName(data.name || "Untitled Board");
+      } catch (err) {
+        console.error("Failed to load board metadata", err);
+        setBoardName("Board Not Found");
+      }
+    }
+    if (id) loadMetadata();
+  }, [id]);
 
   useEffect(() => {
     localStorage.setItem("workspace-mode", mode);
@@ -57,7 +73,7 @@ export default function BoardPage() {
   return (
     <div style={styles.page}>
       <div style={styles.topbar}>
-        <div style={styles.logo}>Realtime Collaborative Workspace</div>
+        <div style={styles.logo}>{boardName}</div>
 
         <div style={styles.centerActions}>
           <div style={styles.modeGroup}>
@@ -96,7 +112,7 @@ export default function BoardPage() {
         {mode === "canvas" && (
           <div style={styles.fullPane}>
             <ErrorFallback>
-              <Whiteboard />
+              <Whiteboard boardId={id} />
             </ErrorFallback>
           </div>
         )}
@@ -104,7 +120,7 @@ export default function BoardPage() {
         {mode === "document" && (
           <div style={styles.fullPane}>
             <ErrorFallback>
-              <DocumentEditor />
+              <DocumentEditor boardId={id} />
             </ErrorFallback>
           </div>
         )}
@@ -113,7 +129,7 @@ export default function BoardPage() {
           <div style={styles.layout}>
             <div style={{ ...styles.leftPane, width: leftWidth }}>
               <ErrorFallback>
-                <Whiteboard />
+                <Whiteboard boardId={id} />
               </ErrorFallback>
             </div>
 
@@ -125,7 +141,7 @@ export default function BoardPage() {
 
             <div style={styles.rightPane}>
               <ErrorFallback>
-                <DocumentEditor />
+                <DocumentEditor boardId={id} />
               </ErrorFallback>
             </div>
           </div>
@@ -157,6 +173,8 @@ const styles = {
     padding: "0 16px",
     background: "#ffffff",
     borderBottom: "1px solid #dbe3ec",
+    position: "relative",
+    zIndex: 100,
   },
   logo: {
     fontSize: 16,

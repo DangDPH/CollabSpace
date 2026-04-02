@@ -1,6 +1,7 @@
-import { useMemo, useRef, useState } from "react";
+import { useMemo, useRef, useState, useEffect } from "react";
 import ReactQuill from "react-quill";
 import "react-quill/dist/quill.snow.css";
+import { fetchDocument, saveDocument } from '../../api/boards';
 
 const DEFAULT_CONTENT = `
   <h1>Project Notes</h1>
@@ -12,11 +13,27 @@ const DEFAULT_CONTENT = `
   </ul>
 `;
 
-function DocumentEditor() {
+function DocumentEditor({ boardId }) {
   const quillRef = useRef(null);
-  const [content, setContent] = useState(
-    localStorage.getItem("document-editor-content") || DEFAULT_CONTENT
-  );
+  const [content, setContent] = useState("");
+  const saveTimeoutRef = useRef(null);
+  const isLoadedRef = useRef(false);
+
+  useEffect(() => {
+    if (boardId) {
+      fetchDocument(boardId)
+        .then(html => {
+          setContent(html || DEFAULT_CONTENT);
+          // Wait a tick before marking loaded to prevent immediate auto-save from setContent
+          setTimeout(() => { isLoadedRef.current = true; }, 100);
+        })
+        .catch(err => {
+          console.error("Failed to fetch document", err);
+          setContent(DEFAULT_CONTENT);
+          setTimeout(() => { isLoadedRef.current = true; }, 100);
+        });
+    }
+  }, [boardId]);
 
   const modules = useMemo(
     () => ({
@@ -48,7 +65,19 @@ function DocumentEditor() {
 
   const saveContent = (next) => {
     setContent(next);
-    localStorage.setItem("document-editor-content", next);
+    
+    if (!isLoadedRef.current) return;
+
+    if (saveTimeoutRef.current) clearTimeout(saveTimeoutRef.current);
+    saveTimeoutRef.current = setTimeout(async () => {
+      if (boardId) {
+        try {
+          await saveDocument(boardId, next);
+        } catch (err) {
+          console.error("Failed to auto-save document", err);
+        }
+      }
+    }, 1500);
   };
 
   const insertHtmlAtCursor = (html) => {

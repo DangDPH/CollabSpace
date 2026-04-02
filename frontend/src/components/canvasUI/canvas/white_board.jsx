@@ -5,11 +5,11 @@ import ShapeRenderer from './shape_renderer';
 import ShapeSelector from './shapes/Shape_Selector';
 
 import io from 'socket.io-client';
-import axios from 'axios';
+import { fetchCanvas, saveCanvas } from '../../../api/boards';
 
 let socket = null;
 try {
-  socket = io('http://localhost:5000', { 
+  socket = io('http://localhost:4000', { 
     reconnectionDelay: 1000, 
     reconnection: true,
     reconnectionAttempts: 5,
@@ -33,7 +33,7 @@ try {
   socket = null;
 }
 
-const Whiteboard = () => {
+const Whiteboard = ({ boardId }) => {
   const [showToolbar, setShowToolbar] = useState(true); // Toggle toolbar visibility
   const sidebarWidth = showToolbar ? 250 : 0; 
   const containerRef = useRef(null);
@@ -92,6 +92,18 @@ const Whiteboard = () => {
     };
   }, [sidebarWidth]);
 
+  // Fetch initial shapes from backend
+  useEffect(() => {
+    if (boardId) {
+      fetchCanvas(boardId).then(elements => {
+        if (elements && elements.length > 0) {
+          setShapes(elements);
+          setHistory([elements]);
+        }
+      }).catch(err => console.error("Failed to fetch initial canvas:", err));
+    }
+  }, [boardId]);
+
   useEffect(() => {
     if (!socket) return; // Skip if socket not initialized
     
@@ -122,6 +134,7 @@ const Whiteboard = () => {
   const [stagePosition, setStagePosition] = useState({ x: 0, y: 0 });
   const isPanning = useRef(false);
   const lastPointerPos = useRef({ x: 0, y: 0 });
+  const saveTimeoutRef = useRef(null);
 
   // Hàm lưu trạng thái mới vào lịch sử
   const commitToHistory = (newShapes) => {
@@ -130,6 +143,18 @@ const Whiteboard = () => {
     newHistory.push(newShapes);
     setHistory(newHistory);
     setHistoryStep(newHistory.length - 1);
+
+    // Auto-save debounced
+    if (saveTimeoutRef.current) clearTimeout(saveTimeoutRef.current);
+    saveTimeoutRef.current = setTimeout(async () => {
+      if (boardId) {
+        try {
+          await saveCanvas(boardId, newShapes);
+        } catch (err) {
+          console.error("Failed to auto-save canvas", err);
+        }
+      }
+    }, 1500);
   };
 
   // Nút Undo

@@ -79,3 +79,55 @@ async def get_canvas(board_id: str):
         
     return canvas
 
+
+async def save_canvas_elements(board_id: str, elements: list):
+    """Saves the drawing shapes back to the database."""
+    db = get_mongo_db()
+    result = await db.canvas_data.update_one(
+        {"board_id": board_id},
+        {"$set": {"elements": elements}}
+    )
+    return result.modified_count > 0
+
+async def get_document(board_id: str):
+    """Fetches the HTML document string for a board."""
+    db = get_mongo_db()
+    try:
+        obj_id = ObjectId(board_id)
+    except Exception:
+        return ""
+    board = await db.boards.find_one({"_id": obj_id})
+    if board and "document_html" in board:
+        return board["document_html"]
+    return ""
+
+async def save_document(board_id: str, html: str):
+    """Saves the HTML document string to the board document."""
+    db = get_mongo_db()
+    try:
+        obj_id = ObjectId(board_id)
+    except Exception:
+        return False
+    result = await db.boards.update_one(
+        {"_id": obj_id},
+        {"$set": {"document_html": html}}
+    )
+    return result.modified_count > 0
+
+async def get_board_metadata(board_id: str):
+    """Fetches board metadata (name, color)."""
+    db = get_mongo_db()
+    try:
+        obj_id = ObjectId(board_id)
+    except Exception:
+        return None
+    doc = await db.boards.find_one({"_id": obj_id})
+    if doc:
+        return {
+            "id": str(doc["_id"]),
+            "name": doc.get("name", ""),
+            "owner_id": doc.get("owner_id", ""),
+            "color": doc.get("color", "#74C0FC"),
+        }
+    return None
+
