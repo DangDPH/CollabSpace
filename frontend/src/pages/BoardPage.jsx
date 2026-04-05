@@ -4,7 +4,7 @@ import '../board_bias_styles.css';
 
 import { fetchBoardMetadata } from '../api/boards';
 import { useAuth } from '../context/AuthContext';
-import { SocketProvider } from '../context/SocketContext';
+import { SocketProvider, useSocket } from '../context/SocketContext';
 
 import Whiteboard from '../components/canvasUI/canvas/white_board';
 import DocumentEditor from '../components/textEditor/TextEditor';
@@ -14,12 +14,30 @@ import VoiceBox from '../components/VoiceBox';
 // Optional: A simple ErrorBoundary fallback wrap if not implemented
 const ErrorFallback = ({ children }) => <>{children}</>;
 
-export default function BoardPage() {
-  const { id } = useParams();
+/* ── Avatar helpers ────────────────────────────────────────── */
+function getInitials(username) {
+  if (!username) return '?';
+  const parts = username.trim().split(/\s+/);
+  return parts.length >= 2
+    ? (parts[0][0] + parts[1][0]).toUpperCase()
+    : username.slice(0, 2).toUpperCase();
+}
+
+const AVATAR_COLORS = [
+  '#4da6ff','#a78bfa','#6ee7b7','#fcd34d',
+  '#f9a8d4','#fd8a5a','#86efac','#c4b5fd',
+];
+
+function avatarColor(username = '') {
+  let hash = 0;
+  for (let i = 0; i < username.length; i++) hash = username.charCodeAt(i) + ((hash << 5) - hash);
+  return AVATAR_COLORS[Math.abs(hash) % AVATAR_COLORS.length];
+}
+
+/* ── Inner board (must be inside SocketProvider to call useSocket) ── */
+function BoardInner({ id }) {
   const navigate = useNavigate();
-  const { user } = useAuth();
-  const userId = user?.id || user?._id || 'anonymous';
-  const username = user?.username || 'Guest';
+  const { roomUsers } = useSocket();
 
   const [mode, setMode] = useState(
     localStorage.getItem("workspace-mode") || "split"
@@ -52,77 +70,76 @@ export default function BoardPage() {
     if (id) loadMetadata();
   }, [id]);
 
-  useEffect(() => {
-    localStorage.setItem("workspace-mode", mode);
-  }, [mode]);
-
-  useEffect(() => {
-    localStorage.setItem("workspace-left-width", String(leftWidth));
-  }, [leftWidth]);
+  useEffect(() => { localStorage.setItem("workspace-mode", mode); }, [mode]);
+  useEffect(() => { localStorage.setItem("workspace-left-width", String(leftWidth)); }, [leftWidth]);
 
   useEffect(() => {
     const handleMouseMove = (e) => {
       if (!isDragging || mode !== "split") return;
-
-      const minLeft = 360;
-      const minRight = 320;
+      const minLeft = 360, minRight = 320;
       const maxLeft = window.innerWidth - minRight;
-
-      const newLeftWidth = Math.min(Math.max(e.clientX, minLeft), maxLeft);
-      setLeftWidth(newLeftWidth);
+      setLeftWidth(Math.min(Math.max(e.clientX, minLeft), maxLeft));
     };
-
     const handleMouseUp = () => setIsDragging(false);
-
     window.addEventListener("mousemove", handleMouseMove);
     window.addEventListener("mouseup", handleMouseUp);
-
     return () => {
       window.removeEventListener("mousemove", handleMouseMove);
       window.removeEventListener("mouseup", handleMouseUp);
     };
   }, [isDragging, mode]);
 
+  /* ── Max 5 avatars shown, rest collapsed ── */
+  const MAX_VISIBLE = 5;
+  const visibleUsers = roomUsers.slice(0, MAX_VISIBLE);
+  const hiddenCount  = roomUsers.length - MAX_VISIBLE;
+
   return (
-    <SocketProvider boardId={id} userId={String(userId)} username={username}>
     <div style={styles.page}>
       <div style={styles.topbar}>
-        <div style={styles.logo}>{boardName}</div>
-
-        <div style={styles.centerActions}>
+        <div style={styles.leftGroup}>
+          <div style={styles.logo}>{boardName}</div>
           <div style={styles.modeGroup}>
-            <button
-              style={mode === "canvas" ? styles.activeButton : styles.button}
-              onClick={() => setMode("canvas")}
-            >
-              Canvas
-            </button>
-
-            <button
-              style={mode === "document" ? styles.activeButton : styles.button}
-              onClick={() => setMode("document")}
-            >
-              Document
-            </button>
-
-            <button
-              style={mode === "split" ? styles.activeButton : styles.button}
-              onClick={() => setMode("split")}
-            >
-              Split
-            </button>
+            <button style={mode === "canvas"   ? styles.activeButton : styles.button} onClick={() => setMode("canvas")}>Canvas</button>
+            <button style={mode === "document" ? styles.activeButton : styles.button} onClick={() => setMode("document")}>Document</button>
+            <button style={mode === "split"    ? styles.activeButton : styles.button} onClick={() => setMode("split")}>Split</button>
           </div>
         </div>
-        
-        <div style={{ display: 'flex', gap: 8, position: 'relative' }}>
-          <button 
+
+        <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+          {/* ── Live user avatars ── */}
+          {roomUsers.length > 0 && (
+            <div style={styles.avatarStrip}>
+              {visibleUsers.map((u, i) => (
+                <div
+                  key={u.user_id || i}
+                  title={u.username}
+                  style={{
+                    ...styles.avatar,
+                    background: avatarColor(u.username),
+                    marginLeft: i > 0 ? -8 : 0,
+                    zIndex: MAX_VISIBLE - i,
+                  }}
+                >
+                  {getInitials(u.username)}
+                </div>
+              ))}
+              {hiddenCount > 0 && (
+                <div style={{ ...styles.avatar, background: '#94a3b8', marginLeft: -8, zIndex: 0 }}>
+                  +{hiddenCount}
+                </div>
+              )}
+            </div>
+          )}
+
+          {/* ── Share & Back ── */}
+          <button
             style={{...styles.button, border: '1px solid #0f62fe', color: '#0f62fe'}}
             onClick={handleShare}
           >
             {showShareTooltip ? '✅ Copied!' : '🔗 Share'}
           </button>
-
-          <button 
+          <button
             style={{...styles.button, border: '1px solid #ff4d4f', color: '#ff4d4f'}}
             onClick={() => navigate('/dashboard')}
           >
@@ -134,47 +151,43 @@ export default function BoardPage() {
       <div style={styles.content}>
         {mode === "canvas" && (
           <div style={styles.fullPane}>
-            <ErrorFallback>
-              <Whiteboard boardId={id} />
-            </ErrorFallback>
+            <ErrorFallback><Whiteboard boardId={id} /></ErrorFallback>
           </div>
         )}
-
         {mode === "document" && (
           <div style={styles.fullPane}>
-            <ErrorFallback>
-              <DocumentEditor boardId={id} />
-            </ErrorFallback>
+            <ErrorFallback><DocumentEditor boardId={id} /></ErrorFallback>
           </div>
         )}
-
         {mode === "split" && (
           <div style={styles.layout}>
             <div style={{ ...styles.leftPane, width: leftWidth }}>
-              <ErrorFallback>
-                <Whiteboard boardId={id} />
-              </ErrorFallback>
+              <ErrorFallback><Whiteboard boardId={id} /></ErrorFallback>
             </div>
-
-            <div
-              style={styles.divider}
-              onMouseDown={() => setIsDragging(true)}
-              title="Drag to resize"
-            />
-
+            <div style={styles.divider} onMouseDown={() => setIsDragging(true)} title="Drag to resize" />
             <div style={styles.rightPane}>
-              <ErrorFallback>
-                <DocumentEditor boardId={id} />
-              </ErrorFallback>
+              <ErrorFallback><DocumentEditor boardId={id} /></ErrorFallback>
             </div>
           </div>
         )}
       </div>
 
-      {/* Chat + Voice box floating overlay */}
       <ChatBox />
       <VoiceBox />
     </div>
+  );
+}
+
+/* ── Outer page wraps SocketProvider ──────────────────────── */
+export default function BoardPage() {
+  const { id } = useParams();
+  const { user } = useAuth();
+  const userId   = user?.id || user?._id || 'anonymous';
+  const username = user?.username || 'Guest';
+
+  return (
+    <SocketProvider boardId={id} userId={String(userId)} username={username}>
+      <BoardInner id={id} />
     </SocketProvider>
   );
 }
@@ -200,18 +213,15 @@ const styles = {
     position: "relative",
     zIndex: 100,
   },
+  leftGroup: {
+    display: "flex",
+    alignItems: "center",
+    gap: 16,
+  },
   logo: {
     fontSize: 16,
     fontWeight: 700,
     color: "#0f172a",
-    flex: 0,
-  },
-  centerActions: {
-    display: "flex",
-    alignItems: "center",
-    gap: 12,
-    flex: 1,
-    justifyContent: "center",
   },
   modeGroup: {
     display: "flex",
@@ -269,5 +279,24 @@ const styles = {
     height: "100%",
     background: "#fff",
     position: "relative",
+  },
+  avatarStrip: {
+    display: "flex",
+    alignItems: "center",
+  },
+  avatar: {
+    width: 32,
+    height: 32,
+    borderRadius: "50%",
+    display: "flex",
+    alignItems: "center",
+    justifyContent: "center",
+    fontSize: 11,
+    fontWeight: 700,
+    color: "#fff",
+    border: "2px solid #fff",
+    cursor: "default",
+    userSelect: "none",
+    flexShrink: 0,
   },
 };

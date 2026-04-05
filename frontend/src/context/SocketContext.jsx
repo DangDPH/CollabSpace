@@ -11,12 +11,14 @@ const SocketContext = createContext(null);
 export function SocketProvider({ boardId, userId, username, children }) {
   const [socket, setSocket] = useState(null);
   const [connected, setConnected] = useState(false);
+  const [roomUsers, setRoomUsers] = useState([]);
 
   useEffect(() => {
     if (!boardId || !userId) return;
 
-    // Connect via the Vite proxy — all traffic goes through port 5173
-    const newSocket = io('/', {
+    const socketUrl = import.meta.env.VITE_SOCKET_URL || '/';
+
+    const newSocket = io(socketUrl, {
       reconnectionDelay: 1000,
       reconnection: true,
       reconnectionAttempts: 10,
@@ -28,12 +30,15 @@ export function SocketProvider({ boardId, userId, username, children }) {
       console.log('[Socket] Connected:', newSocket.id);
       setConnected(true);
 
-      // Join the board room
       newSocket.emit('join_board', {
         board_id: boardId,
         user_id: userId,
         username: username || userId,
       });
+    });
+
+    newSocket.on('room_users', ({ users }) => {
+      if (Array.isArray(users)) setRoomUsers(users);
     });
 
     newSocket.on('disconnect', (reason) => {
@@ -45,7 +50,6 @@ export function SocketProvider({ boardId, userId, username, children }) {
       console.warn('[Socket] Connection error:', err.message);
     });
 
-    // DEBUG: log all incoming events so we can trace what the server sends
     newSocket.onAny((eventName, ...args) => {
       console.log('[Socket] <<', eventName, args);
     });
@@ -53,22 +57,22 @@ export function SocketProvider({ boardId, userId, username, children }) {
     setSocket(newSocket);
 
     return () => {
-      // Leave the board and disconnect
       newSocket.emit('leave_board', { board_id: boardId, user_id: userId });
       newSocket.disconnect();
       setSocket(null);
       setConnected(false);
+      setRoomUsers([]);
     };
   }, [boardId, userId, username]);
 
-  // Memoize so children don't get infinite re-renders
   const value = useMemo(() => ({
     socket,
     connected,
     boardId,
     userId,
     username,
-  }), [socket, connected, boardId, userId, username]);
+    roomUsers,
+  }), [socket, connected, boardId, userId, username, roomUsers]);
 
   return <SocketContext.Provider value={value}>{children}</SocketContext.Provider>;
 }

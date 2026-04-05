@@ -6,6 +6,7 @@ import { useState, useMemo, useRef, useEffect, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 import { fetchBoards, createBoard as apiCreateBoard, deleteBoard as apiDeleteBoard } from '../api/boards';
+import client from '../api/client';
 import '../dashboard.css';
 
 /* ── Thumbnail colour palette ── */
@@ -46,6 +47,7 @@ const DownloadIcon = () => <svg viewBox="0 0 24 24" fill="none" stroke="currentC
 const TrashIcon    = () => <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"/><path d="M10 11v6"/><path d="M14 11v6"/><path d="M9 6V4h6v2"/></svg>;
 const CopyIcon     = () => <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg>;
 const CheckIcon    = () => <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><polyline points="20 6 9 17 4 12"/></svg>;
+const KeyIcon      = () => <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M21 2l-2 2m-7.61 7.61a5.5 5.5 0 1 1-7.778 7.778 5.5 5.5 0 0 1 7.777-7.777zm0 0L15.5 7.5m0 0l3 3L22 7l-3-3m-3.5 3.5L19 4"/></svg>;
 const WarnIcon     = () => <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg>;
 
 /* Board mini art */
@@ -197,6 +199,123 @@ function ConfirmRemoveModal({ board, onConfirm, onClose }) {
 }
 
 /* ══════════════════════════════════════════
+   Reset Password Modal
+══════════════════════════════════════════ */
+
+/* Eye icons for password reveal */
+const EyeIcon = () => (
+  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={{ width: 16, height: 16 }}>
+    <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/>
+  </svg>
+);
+const EyeOffIcon = () => (
+  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={{ width: 16, height: 16 }}>
+    <path d="M17.94 17.94A10.07 10.07 0 0 1 12 20c-7 0-11-8-11-8a18.45 18.45 0 0 1 5.06-5.94M9.9 4.24A9.12 9.12 0 0 1 12 4c7 0 11 8 11 8a18.5 18.5 0 0 1-2.16 3.19m-6.72-1.07a3 3 0 1 1-4.24-4.24"/>
+    <line x1="1" y1="1" x2="23" y2="23"/>
+  </svg>
+);
+
+/* Reusable password input with reveal toggle */
+function PasswordField({ placeholder, value, onChange, autoFocus }) {
+  const [show, setShow] = useState(false);
+  return (
+    <div style={{ position: 'relative' }}>
+      <input
+        className="modal-input"
+        type={show ? 'text' : 'password'}
+        placeholder={placeholder}
+        value={value}
+        onChange={onChange}
+        required
+        autoFocus={autoFocus}
+        style={{ paddingRight: 40 }}
+      />
+      <button
+        type="button"
+        onClick={() => setShow(s => !s)}
+        style={{
+          position: 'absolute', right: 12, top: 12,
+          background: 'none', border: 'none', cursor: 'pointer',
+          color: '#9ca3af', padding: 0, display: 'flex',
+        }}
+        tabIndex={-1}
+        title={show ? 'Hide password' : 'Show password'}
+      >
+        {show ? <EyeOffIcon /> : <EyeIcon />}
+      </button>
+    </div>
+  );
+}
+
+function ResetPasswordModal({ onClose }) {
+  const [form, setForm]       = useState({ current: '', next: '', confirm: '' });
+  const [error, setError]     = useState('');
+  const [success, setSuccess] = useState('');
+  const [loading, setLoading] = useState(false);
+
+  const handleSubmit = async (e) => {
+    e.preventDefault();
+    setError(''); setSuccess('');
+    if (!form.current.trim()) return setError('Current password is required.');
+    if (form.next.length < 6)  return setError('New password must be at least 6 characters.');
+    if (form.next !== form.confirm) return setError('Passwords do not match.');
+    setLoading(true);
+    try {
+      await client.patch('/api/v1/users/me/password', {
+        current_password: form.current,
+        new_password: form.next,
+      });
+      setSuccess('Password updated successfully!');
+      setTimeout(onClose, 1500);
+    } catch (err) {
+      setError(err.response?.data?.detail || 'Failed to update password.');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  return (
+    <div className="modal-overlay" onClick={(e) => e.target === e.currentTarget && onClose()}>
+      <div className="modal">
+        <h2 className="modal-title">Reset Password</h2>
+        <p className="modal-subtitle">Enter your current password and choose a new one.</p>
+        {error   && <div style={{ color: '#dc2626', fontSize: 13, marginBottom: 8 }}>{error}</div>}
+        {success && <div style={{ color: '#16a34a', fontSize: 13, marginBottom: 8 }}>{success}</div>}
+        <form onSubmit={handleSubmit}>
+          <PasswordField
+            placeholder="Current password"
+            value={form.current}
+            onChange={e => setForm(f => ({ ...f, current: e.target.value }))}
+            autoFocus
+          />
+          <PasswordField
+            placeholder="New password (min 6 chars)"
+            value={form.next}
+            onChange={e => setForm(f => ({ ...f, next: e.target.value }))}
+          />
+          <PasswordField
+            placeholder="Confirm new password"
+            value={form.confirm}
+            onChange={e => setForm(f => ({ ...f, confirm: e.target.value }))}
+          />
+          <div className="modal-actions">
+            <button type="button" className="btn-secondary" onClick={onClose}>Cancel</button>
+            <button
+              type="submit"
+              className="btn-primary"
+              style={{ width: 'auto', marginTop: 0, padding: '9px 20px' }}
+              disabled={loading}
+            >
+              {loading ? 'Saving…' : 'Update Password'}
+            </button>
+          </div>
+        </form>
+      </div>
+    </div>
+  );
+}
+
+/* ══════════════════════════════════════════
    Create Board Modal
 ══════════════════════════════════════════ */
 function CreateBoardModal({ onClose, onCreate }) {
@@ -267,8 +386,20 @@ export default function DashboardPage() {
   const [loading, setLoading]       = useState(true);
 
   /* Modal state */
-  const [shareBoard,  setShareBoard]  = useState(null);
-  const [removeBoard, setRemoveBoard] = useState(null);
+  const [shareBoard,     setShareBoard]     = useState(null);
+  const [removeBoard,    setRemoveBoard]    = useState(null);
+  const [showResetPw,    setShowResetPw]    = useState(false);
+  const [showUserMenu,   setShowUserMenu]   = useState(false);
+  const userMenuRef = useRef(null);
+
+  useEffect(() => {
+    if (!showUserMenu) return;
+    const handler = (e) => {
+      if (userMenuRef.current && !userMenuRef.current.contains(e.target)) setShowUserMenu(false);
+    };
+    document.addEventListener('mousedown', handler);
+    return () => document.removeEventListener('mousedown', handler);
+  }, [showUserMenu]);
 
   /* ── Load boards from backend on mount ── */
   useEffect(() => {
@@ -392,11 +523,32 @@ export default function DashboardPage() {
           <span className="sidebar-brand-name">CollabSpace</span>
         </div>
 
-        <div className="sidebar-user">
+        <div className="sidebar-user" ref={userMenuRef} style={{ position: 'relative', cursor: 'pointer' }}
+          onClick={() => setShowUserMenu(o => !o)}
+        >
           <div className="sidebar-avatar">{initials}</div>
           <div className="sidebar-user-info">
             <div className="sidebar-user-name">{user?.username || 'My Workspace'}</div>
           </div>
+          {showUserMenu && (
+            <div style={{
+              position: 'absolute', bottom: '110%', left: 0,
+              background: '#fff', borderRadius: 10, boxShadow: '0 4px 20px rgba(0,0,0,0.12)',
+              padding: '6px 0', minWidth: 180, zIndex: 200,
+            }}>
+              <button
+                onClick={(e) => { e.stopPropagation(); setShowUserMenu(false); setShowResetPw(true); }}
+                style={{
+                  display: 'flex', alignItems: 'center', gap: 8,
+                  width: '100%', background: 'none', border: 'none', padding: '9px 16px',
+                  cursor: 'pointer', fontSize: 14, color: '#334155',
+                }}
+              >
+                <span style={{ width: 16, height: 16, display: 'flex' }}><KeyIcon /></span>
+                Reset Password
+              </button>
+            </div>
+          )}
         </div>
 
         <nav className="sidebar-nav">
@@ -573,6 +725,7 @@ export default function DashboardPage() {
       {showCreate  && <CreateBoardModal   onClose={() => setShowCreate(false)}  onCreate={handleCreate} />}
       {shareBoard  && <ShareModal         board={shareBoard}  onClose={() => setShareBoard(null)} />}
       {removeBoard && <ConfirmRemoveModal board={removeBoard} onClose={() => setRemoveBoard(null)} onConfirm={handleRemoveConfirm} />}
+      {showResetPw && <ResetPasswordModal onClose={() => setShowResetPw(false)} />}
     </div>
   );
 }

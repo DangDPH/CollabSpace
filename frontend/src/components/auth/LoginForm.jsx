@@ -122,7 +122,6 @@ export default function LoginForm({ onSubmit, onSwitchTab }) {
         <div className="form-group">
           <div className="flex justify-between items-center">
             <label className="form-label" htmlFor="login-password">Password</label>
-            <span className="text-xs auth-link">Forgot password?</span>
           </div>
           <div className="form-input-wrapper">
             <span className="form-input-icon"><LockIcon /></span>

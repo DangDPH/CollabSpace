@@ -5,8 +5,13 @@ export default function ChatBox() {
   const [isOpen, setIsOpen] = useState(false);
   const [messages, setMessages] = useState([]);
   const [input, setInput] = useState("");
+  const [hasUnread, setHasUnread] = useState(false);
 
   const { socket, boardId, userId, username } = useSocket();
+  const isOpenRef = useRef(isOpen);
+
+  // Keep ref in sync so the socket handler always knows the current state
+  useEffect(() => { isOpenRef.current = isOpen; }, [isOpen]);
 
   const [position, setPosition] = useState({ x: 0, y: 0 });
 
@@ -42,15 +47,25 @@ export default function ChatBox() {
         }),
       };
       setMessages((prev) => {
-        // Deduplicate by message_id
         if (prev.find(m => m.id === msg.id)) return prev;
         return [...prev, msg];
       });
+
+      // Show notification dot if chat is closed and message is from someone else
+      if (!isOpenRef.current && user_id !== userId) {
+        setHasUnread(true);
+      }
     };
 
     socket.on('receive_message', handleReceiveMessage);
     return () => { socket.off('receive_message', handleReceiveMessage); };
   }, [socket, userId]);
+
+  // Clear unread dot when chat is opened
+  const openChat = () => {
+    setIsOpen(true);
+    setHasUnread(false);
+  };
 
   const sendMessage = () => {
     if (!input.trim() || !socket) return;
@@ -111,10 +126,23 @@ export default function ChatBox() {
   return (
     <>
       {!isOpen && (
-        <button className="chat-toggle" onClick={() => setIsOpen(true)}>
+        <button className="chat-toggle" onClick={openChat}>
           <svg viewBox="0 0 24 24" width="22" height="22" fill="white">
             <path d="M9.036 15.804l-.396 5.592c.567 0 .813-.243 1.11-.534l2.664-2.55 5.52 4.038c1.011.558 1.728.264 1.998-.936l3.624-16.98c.324-1.512-.546-2.106-1.53-1.74L1.86 9.402c-1.47.576-1.446 1.392-.252 1.764l5.46 1.704L19.92 6.24c.612-.396 1.17-.177.714.219" />
           </svg>
+          {hasUnread && (
+            <span style={{
+              position: 'absolute',
+              top: 2,
+              right: 2,
+              width: 12,
+              height: 12,
+              borderRadius: '50%',
+              background: '#ef4444',
+              border: '2px solid #fff',
+              animation: 'pulse-dot 1.5s ease-in-out infinite',
+            }} />
+          )}
         </button>
       )}
 

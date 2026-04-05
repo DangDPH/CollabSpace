@@ -11,3 +11,8 @@ __pycache__/
 
 # OS generated files
 .DS_Store
+
+# Runtime artifacts
+*.db
+*.log
+test_*.py

@@ -28,6 +28,11 @@ class UpdateUserRequest(BaseModel):
     password: Optional[str] = None
 
 
+class ChangePasswordRequest(BaseModel):
+    current_password: str
+    new_password: str
+
+
 class UserResponse(UserBase):
     id: str
     created_at: datetime

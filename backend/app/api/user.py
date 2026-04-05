@@ -2,14 +2,16 @@
 User router — public register/login + authenticated me/logout.
 """
 from typing import Any
-from fastapi import APIRouter, Depends, Request
+from fastapi import APIRouter, Depends, Request, HTTPException, status
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.database import get_db
 from app.core.session import require_authenticated, get_current_jti
 from app.services.user import user_service
+from app.repositories.user import user_repo
+from app.core.security import verify_password, hash_password
 from app.schemas.user import (
-    RegisterRequest, LoginRequest, LoginResponse, UserResponse
+    RegisterRequest, LoginRequest, LoginResponse, UserResponse, ChangePasswordRequest
 )
 
 router = APIRouter()
@@ -44,3 +46,20 @@ async def logout(
 async def get_me(current_user=Depends(require_authenticated)) -> Any:
     """Authenticated — returns current user profile."""
     return current_user
+
+
+@router.patch("/me/password", status_code=200)
+async def change_password(
+    payload: ChangePasswordRequest,
+    db: AsyncSession = Depends(get_db),
+    current_user=Depends(require_authenticated),
+) -> Any:
+    """Authenticated — changes the current user's password."""
+    if not verify_password(payload.current_password, current_user.password_hash):
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Current password is incorrect.",
+        )
+    current_user.password_hash = hash_password(payload.new_password)
+    await db.commit()
+    return {"message": "Password updated successfully."}
