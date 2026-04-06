@@ -37,6 +37,7 @@ const SearchIcon = () => <svg viewBox="0 0 24 24" fill="none" stroke="currentCol
 const GridIcon   = () => <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/><rect x="3" y="14" width="7" height="7"/><rect x="14" y="14" width="7" height="7"/></svg>;
 const ListIcon   = () => <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><line x1="8" y1="6" x2="21" y2="6"/><line x1="8" y1="12" x2="21" y2="12"/><line x1="8" y1="18" x2="21" y2="18"/><line x1="3" y1="6" x2="3.01" y2="6"/><line x1="3" y1="12" x2="3.01" y2="12"/><line x1="3" y1="18" x2="3.01" y2="18"/></svg>;
 const LogOutIcon = () => <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/><polyline points="16 17 21 12 16 7"/><line x1="21" y1="12" x2="9" y2="12"/></svg>;
+const MenuIcon   = () => <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><line x1="3" y1="12" x2="21" y2="12"/><line x1="3" y1="6" x2="21" y2="6"/><line x1="3" y1="18" x2="21" y2="18"/></svg>;
 const BrandIcon  = () => <svg viewBox="0 0 24 24" fill="none"><path d="M4 6L8.5 18L12 10L15.5 18L20 6" stroke="white" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round"/></svg>;
 const OpenIcon   = () => <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"/><polyline points="15 3 21 3 21 9"/><line x1="10" y1="14" x2="21" y2="3"/></svg>;
 
@@ -62,6 +63,26 @@ function BoardArt({ color }) {
       <rect x="34" y="52" width="40" height="8"  rx="4" fill={color} fillOpacity="0.2"/>
     </svg>
   );
+}
+
+/* ── Avatar helpers ────────────────────────────────────────── */
+function getInitials(username) {
+  if (!username) return '?';
+  const parts = username.trim().split(/\s+/);
+  return parts.length >= 2
+    ? (parts[0][0] + parts[1][0]).toUpperCase()
+    : username.slice(0, 2).toUpperCase();
+}
+
+const AVATAR_COLORS = [
+  '#4da6ff', '#a78bfa', '#6ee7b7', '#fcd34d',
+  '#f9a8d4', '#fd8a5a', '#86efac', '#c4b5fd',
+];
+
+function avatarColor(username = '') {
+  let hash = 0;
+  for (let i = 0; i < username.length; i++) hash = username.charCodeAt(i) + ((hash << 5) - hash);
+  return AVATAR_COLORS[Math.abs(hash) % AVATAR_COLORS.length];
 }
 
 /* ══════════════════════════════════════════
@@ -247,6 +268,67 @@ function PasswordField({ placeholder, value, onChange, autoFocus }) {
   );
 }
 
+const UserIcon     = () => <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>;
+
+function ChangeUsernameModal({ onClose }) {
+  const { user, updateUser } = useAuth();
+  const [name, setName]       = useState(user?.username || '');
+  const [error, setError]     = useState('');
+  const [success, setSuccess] = useState('');
+  const [loading, setLoading] = useState(false);
+
+  const handleSubmit = async (e) => {
+    e.preventDefault();
+    setError(''); setSuccess('');
+    if (!name.trim()) return setError('Username is required.');
+    if (name.trim() === user?.username) return onClose();
+
+    setLoading(true);
+    try {
+      await updateUser({ username: name.trim() });
+      setSuccess('Username updated successfully!');
+      setTimeout(onClose, 1500);
+    } catch (err) {
+      setError(err.response?.data?.detail || 'Failed to update username.');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  return (
+    <div className="modal-overlay" onClick={(e) => e.target === e.currentTarget && onClose()}>
+      <div className="modal">
+        <h2 className="modal-title">Change Username</h2>
+        <p className="modal-subtitle">Update your profile name shown to others.</p>
+        {error   && <div style={{ color: '#dc2626', fontSize: 13, marginBottom: 8 }}>{error}</div>}
+        {success && <div style={{ color: '#16a34a', fontSize: 13, marginBottom: 8 }}>{success}</div>}
+        <form onSubmit={handleSubmit}>
+          <input
+            className="modal-input"
+            type="text"
+            placeholder="New username"
+            value={name}
+            onChange={e => setName(e.target.value)}
+            required
+            autoFocus
+          />
+          <div className="modal-actions">
+            <button type="button" className="btn-secondary" onClick={onClose}>Cancel</button>
+            <button
+              type="submit"
+              className="btn-primary"
+              style={{ width: 'auto', marginTop: 0, padding: '9px 20px' }}
+              disabled={loading}
+            >
+              {loading ? 'Saving…' : 'Update Username'}
+            </button>
+          </div>
+        </form>
+      </div>
+    </div>
+  );
+}
+
 function ResetPasswordModal({ onClose }) {
   const [form, setForm]       = useState({ current: '', next: '', confirm: '' });
   const [error, setError]     = useState('');
@@ -384,11 +466,13 @@ export default function DashboardPage() {
   const [viewMode, setViewMode]     = useState('grid');
   const [showCreate, setShowCreate] = useState(false);
   const [loading, setLoading]       = useState(true);
+  const [isSidebarOpen, setIsSidebarOpen] = useState(false); // Mobile sidebar state
 
   /* Modal state */
   const [shareBoard,     setShareBoard]     = useState(null);
   const [removeBoard,    setRemoveBoard]    = useState(null);
   const [showResetPw,    setShowResetPw]    = useState(false);
+  const [showChangeUsername, setShowChangeUsername] = useState(false);
   const [showUserMenu,   setShowUserMenu]   = useState(false);
   const userMenuRef = useRef(null);
 
@@ -512,59 +596,46 @@ export default function DashboardPage() {
   };
 
   const sectionLabel = { home: 'All Boards', recent: 'Recent', starred: 'Starred' }[section];
-  const initials = (user?.username || user?.email || 'U').slice(0, 2).toUpperCase();
+  const userInitials = getInitials(user?.username || user?.email);
 
   return (
     <div className="dashboard-shell">
+      {/* Mobile Sidebar Overlay */}
+      {isSidebarOpen && (
+        <div className="sidebar-overlay" onClick={() => setIsSidebarOpen(false)} />
+      )}
+
       {/* ═══ SIDEBAR ═══════════════════════════════ */}
-      <aside className="sidebar">
+      <aside className={`sidebar ${isSidebarOpen ? 'sidebar-open' : ''}`}>
         <div className="sidebar-brand">
           <div className="sidebar-brand-icon"><BrandIcon /></div>
           <span className="sidebar-brand-name">CollabSpace</span>
         </div>
 
-        <div className="sidebar-user" ref={userMenuRef} style={{ position: 'relative', cursor: 'pointer' }}
-          onClick={() => setShowUserMenu(o => !o)}
-        >
-          <div className="sidebar-avatar">{initials}</div>
+        <div className="sidebar-user">
+          <div className="sidebar-avatar" style={{ background: avatarColor(user?.username || user?.email) }}>{userInitials}</div>
           <div className="sidebar-user-info">
             <div className="sidebar-user-name">{user?.username || 'My Workspace'}</div>
           </div>
-          {showUserMenu && (
-            <div style={{
-              position: 'absolute', bottom: '110%', left: 0,
-              background: '#fff', borderRadius: 10, boxShadow: '0 4px 20px rgba(0,0,0,0.12)',
-              padding: '6px 0', minWidth: 180, zIndex: 200,
-            }}>
-              <button
-                onClick={(e) => { e.stopPropagation(); setShowUserMenu(false); setShowResetPw(true); }}
-                style={{
-                  display: 'flex', alignItems: 'center', gap: 8,
-                  width: '100%', background: 'none', border: 'none', padding: '9px 16px',
-                  cursor: 'pointer', fontSize: 14, color: '#334155',
-                }}
-              >
-                <span style={{ width: 16, height: 16, display: 'flex' }}><KeyIcon /></span>
-                Reset Password
-              </button>
-            </div>
-          )}
         </div>
 
         <nav className="sidebar-nav">
-          <button id="nav-home"    className={`sidebar-nav-item ${section === 'home'    ? 'active' : ''}`} onClick={() => setSection('home')}><HomeIcon />  Home</button>
-          <button id="nav-recent"  className={`sidebar-nav-item ${section === 'recent'  ? 'active' : ''}`} onClick={() => setSection('recent')}><ClockIcon /> Recent</button>
-          <button id="nav-starred" className={`sidebar-nav-item ${section === 'starred' ? 'active' : ''}`} onClick={() => setSection('starred')}><StarIcon />  Starred</button>
+          <button id="nav-home"    className={`sidebar-nav-item ${section === 'home'    ? 'active' : ''}`} onClick={() => { setSection('home'); setIsSidebarOpen(false); }}><HomeIcon />  Home</button>
+          <button id="nav-recent"  className={`sidebar-nav-item ${section === 'recent'  ? 'active' : ''}`} onClick={() => { setSection('recent'); setIsSidebarOpen(false); }}><ClockIcon /> Recent</button>
+          <button id="nav-starred" className={`sidebar-nav-item ${section === 'starred' ? 'active' : ''}`} onClick={() => { setSection('starred'); setIsSidebarOpen(false); }}><StarIcon />  Starred</button>
         </nav>
-
-        <div className="sidebar-bottom">
-          <button id="sidebar-logout" className="sidebar-logout" onClick={handleLogout}><LogOutIcon /> Sign out</button>
-        </div>
       </aside>
 
       {/* ═══ MAIN ═══════════════════════════════════ */}
       <div className="dashboard-main">
         <header className="dashboard-topbar">
+          <button
+            className="hamburger-btn"
+            style={{ display: 'none' }} // Hidden on desktop via CSS media query
+            onClick={() => setIsSidebarOpen(true)}
+          >
+            <MenuIcon />
+          </button>
           <span className="topbar-title">{sectionLabel}</span>
 
           <div className="search-bar">
@@ -586,8 +657,76 @@ export default function DashboardPage() {
           </div>
 
           <button id="create-board-btn" className="btn-create" onClick={() => setShowCreate(true)}>
-            <PlusIcon /> New board
+            <PlusIcon /> <span>New board</span>
           </button>
+
+          <div style={{ position: 'relative', marginLeft: 16 }} ref={userMenuRef}>
+            <div
+              className="topbar-avatar"
+              onClick={() => setShowUserMenu(o => !o)}
+              style={{
+                width: 36, height: 36, borderRadius: '50%',
+                background: avatarColor(user?.username || user?.email),
+                color: '#fff', display: 'flex', alignItems: 'center', justifyContent: 'center',
+                fontSize: 14, fontWeight: 600, cursor: 'pointer', border: '2px solid #e2e8f0'
+              }}
+            >
+              {userInitials}
+            </div>
+
+            {showUserMenu && (
+              <div style={{
+                position: 'absolute', top: '100%', right: 0, marginTop: 8,
+                background: '#fff', borderRadius: 12, boxShadow: '0 8px 30px rgba(0,0,0,0.12)',
+                padding: '6px 0', minWidth: 200, zIndex: 200, border: '1px solid #e5e5ea'
+              }}>
+                <div style={{ padding: '12px 16px', borderBottom: '1px solid #f1f5f9', marginBottom: 4 }}>
+                  <div style={{ fontSize: 13, fontWeight: 700, color: '#0f172a' }}>{user?.username}</div>
+                  <div style={{ fontSize: 11, color: '#64748b', marginTop: 2 }}>{user?.email}</div>
+                </div>
+                <button
+                  onClick={(e) => { e.stopPropagation(); setShowUserMenu(false); setShowChangeUsername(true); }}
+                  style={{
+                    display: 'flex', alignItems: 'center', gap: 10,
+                    width: '100%', background: 'none', border: 'none', padding: '10px 16px',
+                    cursor: 'pointer', fontSize: 13, color: '#334155', transition: 'background 150ms',
+                    textAlign: 'left'
+                  }}
+                  className="user-menu-item"
+                >
+                  <span style={{ width: 16, height: 16, display: 'flex' }}><UserIcon /></span>
+                  Change Username
+                </button>
+                <button
+                  onClick={(e) => { e.stopPropagation(); setShowUserMenu(false); setShowResetPw(true); }}
+                  style={{
+                    display: 'flex', alignItems: 'center', gap: 10,
+                    width: '100%', background: 'none', border: 'none', padding: '10px 16px',
+                    cursor: 'pointer', fontSize: 13, color: '#334155', transition: 'background 150ms',
+                    textAlign: 'left'
+                  }}
+                  className="user-menu-item"
+                >
+                  <span style={{ width: 16, height: 16, display: 'flex' }}><KeyIcon /></span>
+                  Reset Password
+                </button>
+                <div style={{ height: 1, background: '#f1f5f9', margin: '4px 0' }} />
+                <button
+                  onClick={(e) => { e.stopPropagation(); handleLogout(); }}
+                  style={{
+                    display: 'flex', alignItems: 'center', gap: 10,
+                    width: '100%', background: 'none', border: 'none', padding: '10px 16px',
+                    cursor: 'pointer', fontSize: 13, color: '#ef4444', transition: 'background 150ms',
+                    textAlign: 'left'
+                  }}
+                  className="user-menu-item"
+                >
+                  <span style={{ width: 16, height: 16, display: 'flex' }}><LogOutIcon /></span>
+                  Sign out
+                </button>
+              </div>
+            )}
+          </div>
         </header>
 
         <main className="dashboard-content">
@@ -725,6 +864,7 @@ export default function DashboardPage() {
       {showCreate  && <CreateBoardModal   onClose={() => setShowCreate(false)}  onCreate={handleCreate} />}
       {shareBoard  && <ShareModal         board={shareBoard}  onClose={() => setShareBoard(null)} />}
       {removeBoard && <ConfirmRemoveModal board={removeBoard} onClose={() => setRemoveBoard(null)} onConfirm={handleRemoveConfirm} />}
+      {showChangeUsername && <ChangeUsernameModal onClose={() => setShowChangeUsername(false)} />}
       {showResetPw && <ResetPasswordModal onClose={() => setShowResetPw(false)} />}
     </div>
   );

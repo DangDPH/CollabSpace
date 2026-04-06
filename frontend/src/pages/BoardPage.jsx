@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import { useParams, useNavigate } from 'react-router-dom';
-import '../board_bias_styles.css';
+import '../board.css';
 
 import { fetchBoardMetadata } from '../api/boards';
 import { useAuth } from '../context/AuthContext';
@@ -10,6 +10,145 @@ import Whiteboard from '../components/canvasUI/canvas/white_board';
 import DocumentEditor from '../components/textEditor/TextEditor';
 import ChatBox from '../components/ChatBox';
 import VoiceBox from '../components/VoiceBox';
+
+/* ── Icons ─────────────────────────────────────────────────── */
+const KeyIcon      = () => <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" width="16" height="16"><path d="M21 2l-2 2m-7.61 7.61a5.5 5.5 0 1 1-7.778 7.778 5.5 5.5 0 0 1 7.777-7.777zm0 0L15.5 7.5m0 0l3 3L22 7l-3-3m-3.5 3.5L19 4"/></svg>;
+const UserIcon     = () => <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" width="16" height="16"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>;
+const LogOutIcon   = () => <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" width="16" height="16"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/><polyline points="16 17 21 12 16 7"/><line x1="21" y1="12" x2="9" y2="12"/></svg>;
+const EyeIcon = () => (
+  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={{ width: 16, height: 16 }}>
+    <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/>
+  </svg>
+);
+const EyeOffIcon = () => (
+  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={{ width: 16, height: 16 }}>
+    <path d="M17.94 17.94A10.07 10.07 0 0 1 12 20c-7 0-11-8-11-8a18.45 18.45 0 0 1 5.06-5.94M9.9 4.24A9.12 9.12 0 0 1 12 4c7 0 11 8 11 8a18.5 18.5 0 0 1-2.16 3.19m-6.72-1.07a3 3 0 1 1-4.24-4.24"/>
+    <line x1="1" y1="1" x2="23" y2="23"/>
+  </svg>
+);
+
+/* ── Modals (Simplified copies for BoardPage) ──────────────── */
+function PasswordField({ placeholder, value, onChange }) {
+  const [show, setShow] = useState(false);
+  return (
+    <div style={{ position: 'relative', marginBottom: 12 }}>
+      <input
+        className="modal-input"
+        type={show ? 'text' : 'password'}
+        placeholder={placeholder}
+        value={value}
+        onChange={onChange}
+        required
+        style={{ paddingRight: 40, width: '100%', padding: '10px', borderRadius: 8, border: '1px solid #dbe3ec' }}
+      />
+      <button
+        type="button"
+        onClick={() => setShow(s => !s)}
+        style={{
+          position: 'absolute', right: 10, top: 10,
+          background: 'none', border: 'none', cursor: 'pointer',
+          color: '#9ca3af', padding: 0, display: 'flex',
+        }}
+        tabIndex={-1}
+      >
+        {show ? <EyeOffIcon /> : <EyeIcon />}
+      </button>
+    </div>
+  );
+}
+
+function ChangeUsernameModal({ onClose }) {
+  const { user, updateUser } = useAuth();
+  const [name, setName]       = useState(user?.username || '');
+  const [error, setError]     = useState('');
+  const [success, setSuccess] = useState('');
+  const [loading, setLoading] = useState(false);
+
+  const handleSubmit = async (e) => {
+    e.preventDefault();
+    setError(''); setSuccess('');
+    if (!name.trim()) return setError('Username is required.');
+    setLoading(true);
+    try {
+      await updateUser({ username: name.trim() });
+      setSuccess('Username updated successfully!');
+      setTimeout(onClose, 1500);
+    } catch (err) {
+      setError(err.response?.data?.detail || 'Failed to update username.');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  return (
+    <div className="modal-overlay" style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.5)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 1000 }}>
+      <div className="modal" style={{ background: '#fff', padding: 24, borderRadius: 12, width: 320 }}>
+        <h3 style={{ margin: '0 0 8px' }}>Change Username</h3>
+        {error && <div style={{ color: 'red', fontSize: 12, marginBottom: 8 }}>{error}</div>}
+        {success && <div style={{ color: 'green', fontSize: 12, marginBottom: 8 }}>{success}</div>}
+        <form onSubmit={handleSubmit}>
+          <input
+            style={{ width: '100%', padding: 10, borderRadius: 8, border: '1px solid #dbe3ec', marginBottom: 12 }}
+            type="text"
+            placeholder="New username"
+            value={name}
+            onChange={e => setName(e.target.value)}
+            required
+            autoFocus
+          />
+          <div style={{ display: 'flex', gap: 8, justifyContent: 'flex-end' }}>
+            <button type="button" onClick={onClose} style={{ background: '#f1f5f9', border: 'none', padding: '8px 12px', borderRadius: 6, cursor: 'pointer' }}>Cancel</button>
+            <button type="submit" disabled={loading} style={{ background: '#0f62fe', color: '#fff', border: 'none', padding: '8px 12px', borderRadius: 6, cursor: 'pointer' }}>
+              {loading ? '...' : 'Save'}
+            </button>
+          </div>
+        </form>
+      </div>
+    </div>
+  );
+}
+
+function ResetPasswordModal({ onClose }) {
+  const [form, setForm] = useState({ current: '', next: '', confirm: '' });
+  const [error, setError] = useState('');
+  const [success, setSuccess] = useState('');
+  const [loading, setLoading] = useState(false);
+  const client = require('../api/client').default;
+
+  const handleSubmit = async (e) => {
+    e.preventDefault();
+    if (form.next !== form.confirm) return setError('Passwords do not match.');
+    setLoading(true);
+    try {
+      await client.patch('/api/v1/users/me/password', { current_password: form.current, new_password: form.next });
+      setSuccess('Success!');
+      setTimeout(onClose, 1500);
+    } catch (err) {
+      setError(err.response?.data?.detail || 'Error');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  return (
+    <div className="modal-overlay" style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.5)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 1000 }}>
+      <div className="modal" style={{ background: '#fff', padding: 24, borderRadius: 12, width: 320 }}>
+        <h3 style={{ margin: '0 0 8px' }}>Reset Password</h3>
+        {error && <div style={{ color: 'red', fontSize: 12, marginBottom: 8 }}>{error}</div>}
+        {success && <div style={{ color: 'green', fontSize: 12, marginBottom: 8 }}>{success}</div>}
+        <form onSubmit={handleSubmit}>
+          <PasswordField placeholder="Current password" value={form.current} onChange={e => setForm(f => ({ ...f, current: e.target.value }))} />
+          <PasswordField placeholder="New password" value={form.next} onChange={e => setForm(f => ({ ...f, next: e.target.value }))} />
+          <PasswordField placeholder="Confirm" value={form.confirm} onChange={e => setForm(f => ({ ...f, confirm: e.target.value }))} />
+          <div style={{ display: 'flex', gap: 8, justifyContent: 'flex-end' }}>
+            <button type="button" onClick={onClose} style={{ background: '#f1f5f9', border: 'none', padding: '8px 12px', borderRadius: 6, cursor: 'pointer' }}>Cancel</button>
+            <button type="submit" disabled={loading} style={{ background: '#0f62fe', color: '#fff', border: 'none', padding: '8px 12px', borderRadius: 6, cursor: 'pointer' }}>Update</button>
+          </div>
+        </form>
+      </div>
+    </div>
+  );
+}
 
 // Optional: A simple ErrorBoundary fallback wrap if not implemented
 const ErrorFallback = ({ children }) => <>{children}</>;
@@ -49,6 +188,23 @@ function BoardInner({ id }) {
   const [isDragging, setIsDragging] = useState(false);
   const [boardName, setBoardName] = useState("Loading...");
   const [showShareTooltip, setShowShareTooltip] = useState(false);
+  const [isMobile, setIsMobile] = useState(window.innerWidth < 768);
+
+  /* User menu state */
+  const [showUserMenu, setShowUserMenu] = useState(false);
+  const [showChangeName, setShowChangeName] = useState(false);
+  const [showResetPw, setShowResetPw] = useState(false);
+  const { user, logout } = useAuth();
+
+  useEffect(() => {
+    const handleResize = () => {
+      const mobile = window.innerWidth < 768;
+      setIsMobile(mobile);
+      if (mobile && mode === "split") setMode("canvas");
+    };
+    window.addEventListener("resize", handleResize);
+    return () => window.removeEventListener("resize", handleResize);
+  }, [mode]);
 
   const handleShare = () => {
     const url = window.location.href;
@@ -98,11 +254,13 @@ function BoardInner({ id }) {
     <div style={styles.page}>
       <div style={styles.topbar}>
         <div style={styles.leftGroup}>
-          <div style={styles.logo}>{boardName}</div>
+          <div style={{...styles.logo, maxWidth: isMobile ? 80 : 'none', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap'}}>{boardName}</div>
           <div style={styles.modeGroup}>
-            <button style={mode === "canvas"   ? styles.activeButton : styles.button} onClick={() => setMode("canvas")}>Canvas</button>
-            <button style={mode === "document" ? styles.activeButton : styles.button} onClick={() => setMode("document")}>Document</button>
-            <button style={mode === "split"    ? styles.activeButton : styles.button} onClick={() => setMode("split")}>Split</button>
+            <button style={mode === "canvas"   ? styles.activeButton : styles.button} onClick={() => setMode("canvas")}>{isMobile ? '🎨' : 'Canvas'}</button>
+            <button style={mode === "document" ? styles.activeButton : styles.button} onClick={() => setMode("document")}>{isMobile ? '📝' : 'Document'}</button>
+            {!isMobile && (
+              <button style={mode === "split"    ? styles.activeButton : styles.button} onClick={() => setMode("split")}>Split</button>
+            )}
           </div>
         </div>
 
@@ -134,19 +292,74 @@ function BoardInner({ id }) {
 
           {/* ── Share & Back ── */}
           <button
-            style={{...styles.button, border: '1px solid #0f62fe', color: '#0f62fe'}}
+            style={{...styles.button, border: '1px solid #0f62fe', color: '#0f62fe', padding: isMobile ? '8px' : '8px 14px'}}
             onClick={handleShare}
+            title="Share"
           >
-            {showShareTooltip ? '✅ Copied!' : '🔗 Share'}
+            {showShareTooltip ? (isMobile ? '✅' : '✅ Copied!') : (isMobile ? '🔗' : '🔗 Share')}
           </button>
           <button
-            style={{...styles.button, border: '1px solid #ff4d4f', color: '#ff4d4f'}}
+            style={{...styles.button, border: '1px solid #ff4d4f', color: '#ff4d4f', padding: isMobile ? '8px' : '8px 14px'}}
             onClick={() => navigate('/dashboard')}
+            title="Back to Dashboard"
           >
-            Back to Dashboard
+            {isMobile ? '🏠' : 'Back to Dashboard'}
           </button>
+
+          {/* ── User Avatar Menu ── */}
+          <div style={{ position: 'relative', marginLeft: 16 }}>
+            <div
+              onClick={() => setShowUserMenu(!showUserMenu)}
+              style={{
+                ...styles.avatar,
+                width: 36,
+                height: 36,
+                fontSize: 14,
+                background: avatarColor(user?.username || user?.email),
+                cursor: 'pointer',
+                border: '2px solid #e2e8f0'
+              }}
+            >
+              {getInitials(user?.username || user?.email)}
+            </div>
+
+            {showUserMenu && (
+              <div style={{
+                position: 'absolute', top: '100%', right: 0, marginTop: 8,
+                background: '#fff', borderRadius: 10, boxShadow: '0 4px 20px rgba(0,0,0,0.12)',
+                padding: '6px 0', minWidth: 180, zIndex: 200, border: '1px solid #dbe3ec'
+              }}>
+                <div style={{ padding: '8px 16px', borderBottom: '1px solid #f1f5f9', marginBottom: 4 }}>
+                  <div style={{ fontSize: 13, fontWeight: 600, color: '#0f172a' }}>{user?.username}</div>
+                  <div style={{ fontSize: 11, color: '#64748b' }}>{user?.email}</div>
+                </div>
+                <button
+                  onClick={() => { setShowUserMenu(false); setShowChangeName(true); }}
+                  style={styles.dropdownItem}
+                >
+                  <UserIcon /> Change Username
+                </button>
+                <button
+                  onClick={() => { setShowUserMenu(false); setShowResetPw(true); }}
+                  style={styles.dropdownItem}
+                >
+                  <KeyIcon /> Reset Password
+                </button>
+                <div style={{ height: 1, background: '#f1f5f9', margin: '4px 0' }} />
+                <button
+                  onClick={() => logout()}
+                  style={{ ...styles.dropdownItem, color: '#ef4444' }}
+                >
+                  <LogOutIcon /> Sign out
+                </button>
+              </div>
+            )}
+          </div>
         </div>
       </div>
+
+      {showChangeName && <ChangeUsernameModal onClose={() => setShowChangeName(false)} />}
+      {showResetPw && <ResetPasswordModal onClose={() => setShowResetPw(false)} />}
 
       <div style={styles.content}>
         {mode === "canvas" && (
@@ -202,16 +415,17 @@ const styles = {
     background: "#e2e8f0",
   },
   topbar: {
-    height: 56,
+    height: 64,
     flexShrink: 0,
     display: "flex",
     alignItems: "center",
     justifyContent: "space-between",
-    padding: "0 16px",
+    padding: "0 24px",
     background: "#ffffff",
     borderBottom: "1px solid #dbe3ec",
     position: "relative",
     zIndex: 100,
+    gap: 20,
   },
   leftGroup: {
     display: "flex",
@@ -299,4 +513,18 @@ const styles = {
     userSelect: "none",
     flexShrink: 0,
   },
+  dropdownItem: {
+    display: 'flex',
+    alignItems: 'center',
+    gap: 10,
+    width: '100%',
+    background: 'none',
+    border: 'none',
+    padding: '10px 16px',
+    cursor: 'pointer',
+    fontSize: 13,
+    color: '#334155',
+    textAlign: 'left',
+    transition: 'background 150ms'
+  }
 };

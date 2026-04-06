@@ -21,4 +21,7 @@ export const authApi = {
 
   // GET /api/v1/users/me
   me: () => client.get('/api/v1/users/me'),
+
+  // PATCH /api/v1/users/me  (update profile — e.g. username)
+  updateProfile: (data) => client.patch('/api/v1/users/me', data),
 };

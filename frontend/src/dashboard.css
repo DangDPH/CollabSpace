@@ -170,14 +170,20 @@
 
 /* Top bar */
 .dashboard-topbar {
-  height: 60px;
+  height: 64px;
   background: #ffffff;
   border-bottom: 1px solid #e5e5ea;
   display: flex;
   align-items: center;
-  gap: 16px;
-  padding: 0 28px;
+  gap: 20px;
+  padding: 0 24px;
   flex-shrink: 0;
+  transition: padding 0.2s ease;
+}
+
+@media (max-width: 1200px) {
+  .dashboard-topbar { padding: 0 16px; }
+  .dashboard-content { padding: 24px 16px; }
 }
 
 .topbar-title {
@@ -316,8 +322,12 @@
 /* === Board Grid === */
 .board-grid {
   display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
-  gap: 16px;
+  grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
+  gap: 20px;
+}
+
+@media (max-width: 1024px) {
+  .board-grid { grid-template-columns: repeat(auto-fill, minmax(180px, 1fr)); gap: 16px; }
 }
 
 /* Board card */
@@ -797,11 +807,106 @@
 .btn-copy:hover { background: #dbeafe; }
 .btn-copy.copied { background: #f0fdf4; border-color: #bbf7d0; color: #15803d; }
 
-/* List view actions cell */
-.board-list-actions {
-  display: flex;
-  align-items: center;
-  gap: 4px;
-  justify-content: flex-end;
+/* User menu item hover */
+.user-menu-item:hover {
+  background-color: #f8fafc !important;
+}
+
+/* ... (existing styles) ... */
+
+/* === Responsive Media Queries === */
+
+@media (max-width: 768px) {
+  /* Hide sidebar by default on mobile */
+  .sidebar {
+    position: fixed;
+    left: -240px;
+    top: 0;
+    bottom: 0;
+    z-index: 1000;
+    box-shadow: 4px 0 15px rgba(0,0,0,0.1);
+    transition: left 0.3s ease;
+  }
+
+  .sidebar-open {
+    left: 0;
+  }
+
+  /* Overlay behind mobile sidebar */
+  .sidebar-overlay {
+    position: fixed;
+    inset: 0;
+    background: rgba(0,0,0,0.4);
+    backdrop-filter: blur(2px);
+    z-index: 999;
+    display: block;
+  }
+
+  /* Topbar scaling */
+  .dashboard-topbar {
+    padding: 0 16px;
+    gap: 8px;
+  }
+
+  .topbar-title {
+    display: none; /* Hide title to save space on mobile */
+  }
+
+  .search-bar {
+    max-width: unset;
+  }
+
+  .hamburger-btn {
+    display: flex !important;
+    align-items: center;
+    justify-content: center;
+    width: 32px;
+    height: 32px;
+    background: transparent;
+    border: none;
+    cursor: pointer;
+    color: #1a1a2e;
+    padding: 0;
+    margin-right: 8px;
+  }
+
+  /* Modal scaling */
+  .modal {
+    padding: 20px;
+    max-width: calc(100% - 32px);
+  }
+
+  .modal-subtitle {
+    margin-bottom: 16px;
+  }
+
+  .modal-input {
+    margin-bottom: 12px;
+  }
+
+  /* Board grid columns on very small screens */
+  .board-grid {
+    grid-template-columns: repeat(auto-fill, minmax(160px, 1fr));
+    gap: 12px;
+  }
+
+  .dashboard-content {
+    padding: 16px;
+  }
+}
+
+/* Specific to VERY small screens (phones) */
+@media (max-width: 480px) {
+  .btn-create span {
+    display: none; /* Hide "New board" text, only show icon */
+  }
+  
+  .btn-create {
+    padding: 9px 12px;
+  }
+
+  .view-toggle {
+    display: none; /* Hide view toggle to save space */
+  }
 }
 

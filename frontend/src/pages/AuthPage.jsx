@@ -4,8 +4,8 @@
  *   Left  — warm peach branding panel with features
  *   Right — login / register form card
  */
-import { useState } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useState, useEffect } from 'react';
+import { useNavigate, useLocation } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 import LoginForm from '../components/auth/LoginForm';
 import RegisterForm from '../components/auth/RegisterForm';
@@ -59,12 +59,21 @@ const BrandIcon = () => (
 
 export default function AuthPage() {
   const [tab, setTab] = useState('login');
-  const { login, register } = useAuth();
+  const { login, register, isAuthenticated } = useAuth();
   const navigate = useNavigate();
+  const location = useLocation();
+
+  // Where to go after successful login — either the page they tried to visit or /dashboard
+  const redirectTo = location.state?.from?.pathname || '/dashboard';
+
+  // If already authenticated, redirect immediately (e.g. user navigates to /auth manually)
+  useEffect(() => {
+    if (isAuthenticated) navigate(redirectTo, { replace: true });
+  }, [isAuthenticated, navigate, redirectTo]);
 
   const handleLogin = async (credentials) => {
     await login(credentials);
-    navigate('/dashboard');
+    navigate(redirectTo, { replace: true });
   };
 
   const handleRegister = async (payload) => {

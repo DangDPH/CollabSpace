@@ -11,7 +11,8 @@ from app.services.user import user_service
 from app.repositories.user import user_repo
 from app.core.security import verify_password, hash_password
 from app.schemas.user import (
-    RegisterRequest, LoginRequest, LoginResponse, UserResponse, ChangePasswordRequest
+    RegisterRequest, LoginRequest, LoginResponse, UserResponse,
+    ChangePasswordRequest, UpdateUserRequest,
 )
 
 router = APIRouter()
@@ -63,3 +64,15 @@ async def change_password(
     current_user.password_hash = hash_password(payload.new_password)
     await db.commit()
     return {"message": "Password updated successfully."}
+
+
+@router.patch("/me", response_model=UserResponse)
+async def update_profile(
+    payload: UpdateUserRequest,
+    db: AsyncSession = Depends(get_db),
+    current_user=Depends(require_authenticated),
+) -> Any:
+    """Authenticated — updates the current user's profile (e.g. username)."""
+    updated = await user_repo.update(db, current_user, payload)
+    return updated
+

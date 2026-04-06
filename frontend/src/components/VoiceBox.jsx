@@ -16,9 +16,11 @@ export default function VoiceBox() {
   const peerConnectionsRef = useRef({}); // { socketId: RTCPeerConnection }
   const remoteAudiosRef = useRef({});    // { socketId: HTMLAudioElement }
   const socketRef = useRef(socket);      // always-current socket reference
+  const inVoiceRef = useRef(false);      // ref mirror for use in callbacks
 
-  // Keep socketRef in sync so callbacks inside PeerConnection don't go stale
+  // Keep refs in sync so callbacks inside PeerConnection don't go stale
   useEffect(() => { socketRef.current = socket; }, [socket]);
+  useEffect(() => { inVoiceRef.current = inVoice; }, [inVoice]);
 
   const [position, setPosition] = useState({ x: 0, y: 0 });
   const dragData = useRef({ isDragging: false, offsetX: 0, offsetY: 0 });
@@ -54,7 +56,6 @@ export default function VoiceBox() {
 
   /**
    * Create a peer connection for a specific remote socket.
-   * Following the sequence diagram:
    *   - Add local tracks (if we have mic)
    *   - Set up ontrack to receive remote audio
    *   - Set up ICE candidate forwarding
@@ -77,12 +78,33 @@ export default function VoiceBox() {
     // Handle incoming remote audio
     pc.ontrack = (event) => {
       const [remoteStream] = event.streams;
-      if (!remoteAudiosRef.current[targetSocketId]) {
-        const audio = new Audio();
-        audio.srcObject = remoteStream;
-        audio.autoplay = true;
-        remoteAudiosRef.current[targetSocketId] = audio;
+      console.log('[Voice] Received remote track from:', targetSocketId);
+
+      // Clean up old audio element if it exists
+      if (remoteAudiosRef.current[targetSocketId]) {
+        remoteAudiosRef.current[targetSocketId].pause();
+        remoteAudiosRef.current[targetSocketId].srcObject = null;
+        try { remoteAudiosRef.current[targetSocketId].remove(); } catch (_) {}
       }
+
+      const audio = new Audio();
+      audio.srcObject = remoteStream;
+      audio.autoplay = true;
+      audio.playsInline = true;
+      audio.volume = 1.0;
+
+      // Append to DOM — required by some mobile browsers (Safari)
+      audio.style.display = 'none';
+      document.body.appendChild(audio);
+
+      // Explicit play() — autoplay alone is unreliable, especially on mobile
+      audio.play().then(() => {
+        console.log('[Voice] Remote audio playing for:', targetSocketId);
+      }).catch(err => {
+        console.warn('[Voice] Autoplay blocked for', targetSocketId, '- will retry on user gesture:', err.message);
+      });
+
+      remoteAudiosRef.current[targetSocketId] = audio;
     };
 
     // Forward ICE candidates to the target peer via the signaling server
@@ -101,6 +123,11 @@ export default function VoiceBox() {
 
     pc.oniceconnectionstatechange = () => {
       console.log(`[Voice] ICE state for ${targetSocketId}:`, pc.iceConnectionState);
+      // If the connection failed, try to restart ICE
+      if (pc.iceConnectionState === 'failed') {
+        console.warn('[Voice] ICE failed for', targetSocketId, '- attempting restart');
+        pc.restartIce();
+      }
     };
 
     peerConnectionsRef.current[targetSocketId] = pc;
@@ -113,17 +140,17 @@ export default function VoiceBox() {
 
     /**
      * Another user joined voice → we send them an offer
-     * (Sequence diagram: sendOffer → forwardOffer)
      */
-    const handleVoiceJoin = async ({ from_socket_id, user_id: joinUserId }) => {
+    const handleVoiceJoin = async ({ from_socket_id, user_id: joinUserId, username: joinUsername }) => {
       if (from_socket_id === socket.id) return;
-      if (!inVoice) return; // we're not in voice, ignore
+      if (!inVoiceRef.current) return; // we're not in voice, ignore
 
-      console.log('[Voice] Peer joined:', from_socket_id);
+      const peerName = joinUsername || joinUserId;
+      console.log('[Voice] Peer joined:', peerName, from_socket_id);
 
       setVoiceUsers(prev => {
         if (prev.find(u => u.socketId === from_socket_id)) return prev;
-        return [...prev, { socketId: from_socket_id, userId: joinUserId, username: joinUserId }];
+        return [...prev, { socketId: from_socket_id, userId: joinUserId, username: peerName, micOn: true }];
       });
 
       // Create offer and send to the new peer
@@ -134,6 +161,7 @@ export default function VoiceBox() {
       socket.emit('voice_offer', {
         board_id: boardId,
         user_id: userId,
+        username: username,   // ← send our username so the peer can display it
         payload: {
           target_socket_id: from_socket_id,
           sdp: offer,
@@ -143,11 +171,11 @@ export default function VoiceBox() {
 
     /**
      * Received an offer from another peer → send back an answer
-     * (Sequence diagram: notifyIncomingCall → acceptVoiceChat → sendAnswer)
      */
-    const handleVoiceOffer = async ({ payload }) => {
+    const handleVoiceOffer = async ({ user_id: offerUserId, username: offerUsername, payload }) => {
       const { from_socket_id, sdp } = payload;
-      console.log('[Voice] Received offer from:', from_socket_id);
+      const peerName = offerUsername || offerUserId;
+      console.log('[Voice] Received offer from:', peerName, from_socket_id);
 
       // Auto-accept: create connection and answer
       const pc = createPeerConnection(from_socket_id);
@@ -158,6 +186,7 @@ export default function VoiceBox() {
       socket.emit('voice_answer', {
         board_id: boardId,
         user_id: userId,
+        username: username,   // ← send our username
         payload: {
           target_socket_id: from_socket_id,
           sdp: answer,
@@ -167,26 +196,31 @@ export default function VoiceBox() {
       // Add this peer to user list if not already there
       setVoiceUsers(prev => {
         if (prev.find(u => u.socketId === from_socket_id)) return prev;
-        return [...prev, { socketId: from_socket_id, userId: 'Peer', username: 'Peer' }];
+        return [...prev, { socketId: from_socket_id, userId: offerUserId, username: peerName, micOn: true }];
       });
     };
 
     /**
      * Received an answer to our offer
-     * (Sequence diagram: forwardAnswer)
      */
-    const handleVoiceAnswer = async ({ payload }) => {
+    const handleVoiceAnswer = async ({ user_id: ansUserId, username: ansUsername, payload }) => {
       const { from_socket_id, sdp } = payload;
-      console.log('[Voice] Received answer from:', from_socket_id);
+      const peerName = ansUsername || ansUserId;
+      console.log('[Voice] Received answer from:', peerName, from_socket_id);
+
       const pc = peerConnectionsRef.current[from_socket_id];
       if (pc) {
         await pc.setRemoteDescription(new RTCSessionDescription(sdp));
       }
+
+      // Update the peer's username if we only had 'Peer' or a UUID before
+      setVoiceUsers(prev => prev.map(u =>
+        u.socketId === from_socket_id ? { ...u, username: peerName, userId: ansUserId } : u
+      ));
     };
 
     /**
      * ICE candidate exchange
-     * (Sequence diagram: sendICECandidate ↔ forwardICECandidate)
      */
     const handleIceCandidate = async ({ payload }) => {
       const { from_socket_id, candidate } = payload;
@@ -210,7 +244,23 @@ export default function VoiceBox() {
       const pc = peerConnectionsRef.current[from_socket_id];
       if (pc) { pc.close(); delete peerConnectionsRef.current[from_socket_id]; }
       const audio = remoteAudiosRef.current[from_socket_id];
-      if (audio) { audio.pause(); delete remoteAudiosRef.current[from_socket_id]; }
+      if (audio) {
+        audio.pause();
+        audio.srcObject = null;
+        try { audio.remove(); } catch (_) {}
+        delete remoteAudiosRef.current[from_socket_id];
+      }
+    };
+
+    /**
+     * A peer toggled their mute state → update UI
+     */
+    const handleToggleMute = ({ from_socket_id, payload }) => {
+      const { muted } = payload || {};
+      console.log('[Voice] Peer mute toggle:', from_socket_id, 'muted:', muted);
+      setVoiceUsers(prev => prev.map(u =>
+        u.socketId === from_socket_id ? { ...u, micOn: !muted } : u
+      ));
     };
 
     socket.on('voice_join', handleVoiceJoin);
@@ -218,6 +268,7 @@ export default function VoiceBox() {
     socket.on('voice_answer', handleVoiceAnswer);
     socket.on('voice_ice_candidate', handleIceCandidate);
     socket.on('voice_leave', handleVoiceLeave);
+    socket.on('toggle_mute', handleToggleMute);
 
     return () => {
       socket.off('voice_join', handleVoiceJoin);
@@ -225,8 +276,9 @@ export default function VoiceBox() {
       socket.off('voice_answer', handleVoiceAnswer);
       socket.off('voice_ice_candidate', handleIceCandidate);
       socket.off('voice_leave', handleVoiceLeave);
+      socket.off('toggle_mute', handleToggleMute);
     };
-  }, [socket, boardId, userId, inVoice, createPeerConnection]);
+  }, [socket, boardId, userId, username, createPeerConnection]);
 
   /**
    * Join the voice channel.
@@ -251,9 +303,9 @@ export default function VoiceBox() {
 
     setInVoice(true);
 
-    // Tell everyone we joined
+    // Tell everyone we joined — include our username
     if (socket) {
-      socket.emit('voice_join', { board_id: boardId, user_id: userId });
+      socket.emit('voice_join', { board_id: boardId, user_id: userId, username: username });
     }
   };
 
@@ -271,8 +323,12 @@ export default function VoiceBox() {
     Object.values(peerConnectionsRef.current).forEach(pc => pc.close());
     peerConnectionsRef.current = {};
 
-    // Stop all remote audio
-    Object.values(remoteAudiosRef.current).forEach(audio => audio.pause());
+    // Stop and remove all remote audio elements
+    Object.values(remoteAudiosRef.current).forEach(audio => {
+      audio.pause();
+      audio.srcObject = null;
+      try { audio.remove(); } catch (_) {}
+    });
     remoteAudiosRef.current = {};
 
     setVoiceUsers([]);
@@ -287,6 +343,7 @@ export default function VoiceBox() {
   /**
    * Toggle microphone on/off.
    * If mic was never acquired (micAvailable=false), try again.
+   * Emits toggle_mute to peers so they can update their UI.
    */
   const toggleMic = async () => {
     if (!localStreamRef.current) {
@@ -298,11 +355,21 @@ export default function VoiceBox() {
         setMicAvailable(true);
 
         // Add tracks to all existing peer connections
-        Object.values(peerConnectionsRef.current).forEach(pc => {
+        Object.entries(peerConnectionsRef.current).forEach(([socketId, pc]) => {
           stream.getTracks().forEach(track => {
             pc.addTrack(track, stream);
           });
         });
+
+        // Broadcast unmuted state
+        if (socket) {
+          socket.emit('toggle_mute', {
+            board_id: boardId,
+            user_id: userId,
+            username: username,
+            payload: { muted: false },
+          });
+        }
       } catch (err) {
         console.warn('[Voice] Still cannot access microphone:', err.message);
         setMicAvailable(false);
@@ -311,18 +378,41 @@ export default function VoiceBox() {
     }
 
     // Toggle existing mic tracks
+    const newMicState = !micOn;
     localStreamRef.current.getAudioTracks().forEach(track => {
-      track.enabled = !track.enabled;
+      track.enabled = newMicState;
     });
-    setMicOn(prev => !prev);
+    setMicOn(newMicState);
+
+    // Broadcast mute state to peers
+    if (socket) {
+      socket.emit('toggle_mute', {
+        board_id: boardId,
+        user_id: userId,
+        username: username,
+        payload: { muted: !newMicState },
+      });
+    }
   };
 
   const toggleAudio = () => {
+    const newAudioState = !audioOn;
     Object.values(remoteAudiosRef.current).forEach(audio => {
-      audio.muted = audioOn;
+      audio.muted = !newAudioState;
     });
-    setAudioOn(prev => !prev);
+    setAudioOn(newAudioState);
   };
+
+  // Retry playing any blocked audio elements (for mobile autoplay policy)
+  const retryPlayback = useCallback(() => {
+    Object.entries(remoteAudiosRef.current).forEach(([sid, audio]) => {
+      if (audio.paused && audio.srcObject) {
+        audio.play().then(() => {
+          console.log('[Voice] Resumed playback for:', sid);
+        }).catch(() => {});
+      }
+    });
+  }, []);
 
   const iconSize = 22;
   const iconColor = "#1E88E5";
@@ -342,7 +432,7 @@ export default function VoiceBox() {
             <button onClick={() => setIsOpen(false)}>✖</button>
           </div>
 
-          <div className="voice-body">
+          <div className="voice-body" onClick={retryPlayback}>
             {!inVoice ? (
               <button className="join-btn" onClick={joinVoice}>Join Voice Chat</button>
             ) : (
@@ -384,9 +474,22 @@ export default function VoiceBox() {
                     <span className="user-name">{user.username || user.userId}</span>
                     <span className="user-mic" style={{ position: "relative" }}>
                       <FaMicrophone
-                        color="#4CAF50"
+                        color={user.micOn ? "#4CAF50" : "#999"}
                         size={iconSize}
                       />
+                      {!user.micOn && (
+                        <svg
+                          style={{ position: "absolute", top: 0, left: 0 }}
+                          width={iconSize} height={iconSize}
+                          viewBox="0 0 24 24"
+                          fill="none"
+                          stroke="#999"
+                          strokeWidth="2"
+                          strokeLinecap="round"
+                        >
+                          <line x1="5" y1="5" x2="19" y2="19" />
+                        </svg>
+                      )}
                     </span>
                   </div>
                 ))}

@@ -47,3 +47,6 @@ frontend/build/
 *.log
 temp_*.txt
 *.tmp
+
+# Grapuco
+.grapuco/
