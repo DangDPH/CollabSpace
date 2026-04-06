@@ -13,12 +13,18 @@ from app.core.config import settings
 
 # ── MySQL (SQLAlchemy) ───────────────────────────────────────────────────────
 engine_kwargs = {"echo": False}
-if "sqlite" not in settings.MYSQL_URI:
+mysql_uri = settings.MYSQL_URI
+
+# Railway provides mysql://, but async SQLAlchemy needs mysql+aiomysql://
+if mysql_uri.startswith("mysql://") and "+aiomysql" not in mysql_uri:
+    mysql_uri = mysql_uri.replace("mysql://", "mysql+aiomysql://", 1)
+
+if "sqlite" not in mysql_uri:
     engine_kwargs["pool_pre_ping"] = True
     engine_kwargs["pool_recycle"] = 3600
 
 engine = create_async_engine(
-    settings.MYSQL_URI,
+    mysql_uri,
     **engine_kwargs
 )
 
