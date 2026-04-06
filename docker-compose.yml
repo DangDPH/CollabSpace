@@ -7,8 +7,8 @@ services:
     environment:
       MYSQL_ROOT_PASSWORD: mysecretpassword
       MYSQL_DATABASE: collabspace_users
-    ports:
-      - "3306:3306"
+    # Ports 3306 and 27017 are hidden from the web in production
+    # Volumes persist data across restarts
     volumes:
       - mysql_data:/var/lib/mysql
 
@@ -21,8 +21,7 @@ services:
       MONGO_INITDB_ROOT_USERNAME: root
       MONGO_INITDB_ROOT_PASSWORD: mysecretpassword
       MONGO_INITDB_DATABASE: collabspace_boards
-    ports:
-      - "27017:27017"
+# mongodb ports hidden
     volumes:
       - mongo_data:/data/db
 
@@ -62,8 +61,8 @@ services:
     build:
       context: ./frontend
       args:
-        VITE_API_URL: "http://localhost:8000"
-        VITE_SOCKET_URL: "http://localhost:3000"
+        VITE_API_URL: ""
+        VITE_SOCKET_URL: ""
     container_name: collab_frontend
     restart: always
     depends_on:

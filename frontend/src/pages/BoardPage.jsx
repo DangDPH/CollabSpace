@@ -57,98 +57,7 @@ function PasswordField({ placeholder, value, onChange }) {
   );
 }
 
-function ChangeUsernameModal({ onClose }) {
-  const { user, updateUser } = useAuth();
-  const [name, setName]       = useState(user?.username || '');
-  const [error, setError]     = useState('');
-  const [success, setSuccess] = useState('');
-  const [loading, setLoading] = useState(false);
-
-  const handleSubmit = async (e) => {
-    e.preventDefault();
-    setError(''); setSuccess('');
-    if (!name.trim()) return setError('Username is required.');
-    setLoading(true);
-    try {
-      await updateUser({ username: name.trim() });
-      setSuccess('Username updated successfully!');
-      setTimeout(onClose, 1500);
-    } catch (err) {
-      setError(err.response?.data?.detail || 'Failed to update username.');
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  return (
-    <div className="modal-overlay" style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.5)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 1000 }}>
-      <div className="modal" style={{ background: '#fff', padding: 24, borderRadius: 12, width: 320 }}>
-        <h3 style={{ margin: '0 0 8px' }}>Change Username</h3>
-        {error && <div style={{ color: 'red', fontSize: 12, marginBottom: 8 }}>{error}</div>}
-        {success && <div style={{ color: 'green', fontSize: 12, marginBottom: 8 }}>{success}</div>}
-        <form onSubmit={handleSubmit}>
-          <input
-            style={{ width: '100%', padding: 10, borderRadius: 8, border: '1px solid #dbe3ec', marginBottom: 12 }}
-            type="text"
-            placeholder="New username"
-            value={name}
-            onChange={e => setName(e.target.value)}
-            required
-            autoFocus
-          />
-          <div style={{ display: 'flex', gap: 8, justifyContent: 'flex-end' }}>
-            <button type="button" onClick={onClose} style={{ background: '#f1f5f9', border: 'none', padding: '8px 12px', borderRadius: 6, cursor: 'pointer' }}>Cancel</button>
-            <button type="submit" disabled={loading} style={{ background: '#0f62fe', color: '#fff', border: 'none', padding: '8px 12px', borderRadius: 6, cursor: 'pointer' }}>
-              {loading ? '...' : 'Save'}
-            </button>
-          </div>
-        </form>
-      </div>
-    </div>
-  );
-}
-
-function ResetPasswordModal({ onClose }) {
-  const [form, setForm] = useState({ current: '', next: '', confirm: '' });
-  const [error, setError] = useState('');
-  const [success, setSuccess] = useState('');
-  const [loading, setLoading] = useState(false);
-  const client = require('../api/client').default;
-
-  const handleSubmit = async (e) => {
-    e.preventDefault();
-    if (form.next !== form.confirm) return setError('Passwords do not match.');
-    setLoading(true);
-    try {
-      await client.patch('/api/v1/users/me/password', { current_password: form.current, new_password: form.next });
-      setSuccess('Success!');
-      setTimeout(onClose, 1500);
-    } catch (err) {
-      setError(err.response?.data?.detail || 'Error');
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  return (
-    <div className="modal-overlay" style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.5)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 1000 }}>
-      <div className="modal" style={{ background: '#fff', padding: 24, borderRadius: 12, width: 320 }}>
-        <h3 style={{ margin: '0 0 8px' }}>Reset Password</h3>
-        {error && <div style={{ color: 'red', fontSize: 12, marginBottom: 8 }}>{error}</div>}
-        {success && <div style={{ color: 'green', fontSize: 12, marginBottom: 8 }}>{success}</div>}
-        <form onSubmit={handleSubmit}>
-          <PasswordField placeholder="Current password" value={form.current} onChange={e => setForm(f => ({ ...f, current: e.target.value }))} />
-          <PasswordField placeholder="New password" value={form.next} onChange={e => setForm(f => ({ ...f, next: e.target.value }))} />
-          <PasswordField placeholder="Confirm" value={form.confirm} onChange={e => setForm(f => ({ ...f, confirm: e.target.value }))} />
-          <div style={{ display: 'flex', gap: 8, justifyContent: 'flex-end' }}>
-            <button type="button" onClick={onClose} style={{ background: '#f1f5f9', border: 'none', padding: '8px 12px', borderRadius: 6, cursor: 'pointer' }}>Cancel</button>
-            <button type="submit" disabled={loading} style={{ background: '#0f62fe', color: '#fff', border: 'none', padding: '8px 12px', borderRadius: 6, cursor: 'pointer' }}>Update</button>
-          </div>
-        </form>
-      </div>
-    </div>
-  );
-}
+// Modals removed for simplification
 
 // Optional: A simple ErrorBoundary fallback wrap if not implemented
 const ErrorFallback = ({ children }) => <>{children}</>;
@@ -192,9 +101,7 @@ function BoardInner({ id }) {
 
   /* User menu state */
   const [showUserMenu, setShowUserMenu] = useState(false);
-  const [showChangeName, setShowChangeName] = useState(false);
-  const [showResetPw, setShowResetPw] = useState(false);
-  const { user, logout } = useAuth();
+  const { user } = useAuth();
 
   useEffect(() => {
     const handleResize = () => {
@@ -329,37 +236,16 @@ function BoardInner({ id }) {
                 background: '#fff', borderRadius: 10, boxShadow: '0 4px 20px rgba(0,0,0,0.12)',
                 padding: '6px 0', minWidth: 180, zIndex: 200, border: '1px solid #dbe3ec'
               }}>
-                <div style={{ padding: '8px 16px', borderBottom: '1px solid #f1f5f9', marginBottom: 4 }}>
+                <div style={{ padding: '8px 16px' }}>
                   <div style={{ fontSize: 13, fontWeight: 600, color: '#0f172a' }}>{user?.username}</div>
                   <div style={{ fontSize: 11, color: '#64748b' }}>{user?.email}</div>
                 </div>
-                <button
-                  onClick={() => { setShowUserMenu(false); setShowChangeName(true); }}
-                  style={styles.dropdownItem}
-                >
-                  <UserIcon /> Change Username
-                </button>
-                <button
-                  onClick={() => { setShowUserMenu(false); setShowResetPw(true); }}
-                  style={styles.dropdownItem}
-                >
-                  <KeyIcon /> Reset Password
-                </button>
-                <div style={{ height: 1, background: '#f1f5f9', margin: '4px 0' }} />
-                <button
-                  onClick={() => logout()}
-                  style={{ ...styles.dropdownItem, color: '#ef4444' }}
-                >
-                  <LogOutIcon /> Sign out
-                </button>
               </div>
             )}
           </div>
         </div>
       </div>
 
-      {showChangeName && <ChangeUsernameModal onClose={() => setShowChangeName(false)} />}
-      {showResetPw && <ResetPasswordModal onClose={() => setShowResetPw(false)} />}
 
       <div style={styles.content}>
         {mode === "canvas" && (
