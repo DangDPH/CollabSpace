@@ -63,17 +63,48 @@ export default function AuthPage() {
   const navigate = useNavigate();
   const location = useLocation();
 
-  // Where to go after successful login — either the page they tried to visit or /dashboard
-  const redirectTo = location.state?.from?.pathname || '/dashboard';
+  // ── Redirect logic ──────────────────────────────────────────
+  // 1. Prioritize current route state (from ProtectedRoute)
+  // 2. Fallback to localStorage (if they refreshed or navigated within auth)
+  // 3. Final default to /dashboard
+  const getDestination = () => {
+    const fromState = location.state?.from;
+    const fromStorage = localStorage.getItem('redirect_after_login');
+    
+    // Prioritize the full path (pathname + search) from state
+    if (fromState) return fromState.pathname + (fromState.search || '');
+    if (fromStorage) return fromStorage;
+    
+    return '/dashboard';
+  };
 
-  // If already authenticated, redirect immediately (e.g. user navigates to /auth manually)
+  // Persist state to storage whenever it arrives
   useEffect(() => {
-    if (isAuthenticated) navigate(redirectTo, { replace: true });
-  }, [isAuthenticated, navigate, redirectTo]);
+    const fromState = location.state?.from;
+    if (fromState) {
+      const fullPath = fromState.pathname + (fromState.search || '');
+      if (fullPath !== '/auth' && fullPath !== '/') {
+        localStorage.setItem('redirect_after_login', fullPath);
+      }
+    }
+  }, [location.state]);
+
+  // Handle redirect when authentication status changes
+  useEffect(() => {
+    if (isAuthenticated) {
+      const dest = getDestination();
+      localStorage.removeItem('redirect_after_login');
+      navigate(dest, { replace: true });
+    }
+  }, [isAuthenticated, navigate]);
 
   const handleLogin = async (credentials) => {
-    await login(credentials);
-    navigate(redirectTo, { replace: true });
+    try {
+      await login(credentials);
+      // The useEffect above will handle the navigation once isAuthenticated is true
+    } catch (err) {
+      console.error("Login failed:", err);
+    }
   };
 
   const handleRegister = async (payload) => {
