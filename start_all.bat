@@ -1,22 +1,16 @@
 @echo off
-setlocal
-cd /d "%~dp0"
-
-echo 🧼 Cleaning up containers...
-docker-compose down >nul 2>&1
-
-echo 🏗️ Building and Starting CollabSpace...
-docker-compose up --build -d
-
-echo 🚀 ---------------------------------------------------
-echo    ╔════════════════════════════════════════════════╗
-echo    ║      COLLABSPACE: ACCESS DASHBOARD             ║
-echo    ╚════════════════════════════════════════════════╝
-echo    1. LOCAL:  http://localhost
-echo    2. GLOBAL: npx cloudflared tunnel --url http://localhost:80
-echo    ---------------------------------------------------
-echo    💡 TIP: Share the Global link with your team for
-echo    full HTTPS support and microphone access!
-echo 🚀 ---------------------------------------------------
-
+echo ===================================================
+echo ⚠️  THIS SCRIPT IS DEPRECATED ⚠️
+echo ===================================================
+echo.
+echo CollabSpace has moved to a Unified Docker workflow.
+echo Please do not use this batch file.
+echo.
+echo TO START THE PLATFORM:
+echo Run: docker-compose up --build -d
+echo.
+echo TO SHARE GLOBALLY:
+echo Run: npx cloudflared tunnel --url http://localhost:80
+echo.
+echo ===================================================
 pause
