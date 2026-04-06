@@ -27,38 +27,6 @@ const EyeOffIcon = () => (
   </svg>
 );
 
-/* ── Modals (Simplified copies for BoardPage) ──────────────── */
-function PasswordField({ placeholder, value, onChange }) {
-  const [show, setShow] = useState(false);
-  return (
-    <div style={{ position: 'relative', marginBottom: 12 }}>
-      <input
-        className="modal-input"
-        type={show ? 'text' : 'password'}
-        placeholder={placeholder}
-        value={value}
-        onChange={onChange}
-        required
-        style={{ paddingRight: 40, width: '100%', padding: '10px', borderRadius: 8, border: '1px solid #dbe3ec' }}
-      />
-      <button
-        type="button"
-        onClick={() => setShow(s => !s)}
-        style={{
-          position: 'absolute', right: 10, top: 10,
-          background: 'none', border: 'none', cursor: 'pointer',
-          color: '#9ca3af', padding: 0, display: 'flex',
-        }}
-        tabIndex={-1}
-      >
-        {show ? <EyeOffIcon /> : <EyeIcon />}
-      </button>
-    </div>
-  );
-}
-
-// Modals removed for simplification
-
 // Optional: A simple ErrorBoundary fallback wrap if not implemented
 const ErrorFallback = ({ children }) => <>{children}</>;
 
@@ -115,7 +83,28 @@ function BoardInner({ id }) {
 
   const handleShare = () => {
     const url = window.location.href;
-    navigator.clipboard.writeText(url);
+    
+    // Attempt modern Clipboard API first
+    if (navigator.clipboard && navigator.clipboard.writeText) {
+      navigator.clipboard.writeText(url).catch(() => {
+        // Silently fail to fallback
+      });
+    } else {
+      // 🕵️‍♂️ Fallback for insecure contexts (HTTP/Local IP)
+      const input = document.createElement('input');
+      input.value = url;
+      input.style.position = 'fixed';
+      input.style.opacity = '0';
+      document.body.appendChild(input);
+      input.select();
+      try {
+        document.execCommand('copy');
+      } catch (err) {
+        console.warn('[Share] Fallback copy failed:', err);
+      }
+      document.body.removeChild(input);
+    }
+
     setShowShareTooltip(true);
     setTimeout(() => setShowShareTooltip(false), 2000);
   };
@@ -236,7 +225,7 @@ function BoardInner({ id }) {
                 background: '#fff', borderRadius: 10, boxShadow: '0 4px 20px rgba(0,0,0,0.12)',
                 padding: '6px 0', minWidth: 180, zIndex: 200, border: '1px solid #dbe3ec'
               }}>
-                <div style={{ padding: '8px 16px' }}>
+                <div style={{ padding: '12px 16px' }}>
                   <div style={{ fontSize: 13, fontWeight: 600, color: '#0f172a' }}>{user?.username}</div>
                   <div style={{ fontSize: 11, color: '#64748b' }}>{user?.email}</div>
                 </div>

@@ -23,7 +23,7 @@ export function SocketProvider({ boardId, userId, username, children }) {
       reconnection: true,
       reconnectionAttempts: 10,
       reconnectionDelayMax: 5000,
-      transports: ['websocket', 'polling'],
+      transports: ['websocket'], // Force WebSocket for tunnel stability
     });
 
     newSocket.on('connect', () => {

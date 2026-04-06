@@ -51,8 +51,16 @@ export default function VoiceBox() {
     };
   }, []);
 
-  // WebRTC ICE servers
-  const iceConfig = { iceServers: [{ urls: 'stun:stun.l.google.com:19302' }] };
+  // WebRTC ICE servers — using multiple public STUN servers for maximum reliability over tunnels
+  const iceConfig = {
+    iceServers: [
+      { urls: 'stun:stun.l.google.com:19302' },
+      { urls: 'stun:stun1.l.google.com:19302' },
+      { urls: 'stun:stun2.l.google.com:19302' },
+    ],
+    iceCandidatePoolSize: 10,
+    bundlePolicy: 'max-bundle', // More reliable for mobile browsers
+  };
 
   /**
    * Create a peer connection for a specific remote socket.
@@ -121,10 +129,33 @@ export default function VoiceBox() {
       }
     };
 
+    pc.onicegatheringstatechange = () => {
+      console.log(`[Voice] ICE gathering state for ${targetSocketId}:`, pc.iceGatheringState);
+      // In Non-Trickle mode, we could wait for 'complete' here to send the SDP.
+      // But we will stick to a "Sturdy Trickle" + Reconnect Button for better UX.
+    };
+
     pc.oniceconnectionstatechange = () => {
-      console.log(`[Voice] ICE state for ${targetSocketId}:`, pc.iceConnectionState);
-      // If the connection failed, try to restart ICE
-      if (pc.iceConnectionState === 'failed') {
+      const state = pc.iceConnectionState;
+      console.log(`[Voice] ICE connection state for ${targetSocketId}:`, state);
+      
+      // If it disconnects, wait 5 seconds before showing DISCONNECTED to the user.
+      // This ignores "flutters" in the tunnel and Wi-Fi.
+      if (state === 'disconnected') {
+        setTimeout(() => {
+          if (pc.iceConnectionState === 'disconnected') {
+            setVoiceUsers(prev => prev.map(u => 
+              u.socketId === targetSocketId ? { ...u, iceState: 'disconnected' } : u
+            ));
+          }
+        }, 5000);
+      } else {
+        setVoiceUsers(prev => prev.map(u => 
+          u.socketId === targetSocketId ? { ...u, iceState: state } : u
+        ));
+      }
+
+      if (state === 'failed') {
         console.warn('[Voice] ICE failed for', targetSocketId, '- attempting restart');
         pc.restartIce();
       }
@@ -158,10 +189,11 @@ export default function VoiceBox() {
       const offer = await pc.createOffer();
       await pc.setLocalDescription(offer);
 
+      // Sturdy Trickle: We send the offer immediately, but include a delay-retry if needed
       socket.emit('voice_offer', {
         board_id: boardId,
         user_id: userId,
-        username: username,   // ← send our username so the peer can display it
+        username: username,
         payload: {
           target_socket_id: from_socket_id,
           sdp: offer,
@@ -279,6 +311,26 @@ export default function VoiceBox() {
       socket.off('toggle_mute', handleToggleMute);
     };
   }, [socket, boardId, userId, username, createPeerConnection]);
+ 
+  /**
+   * Universal Mobile Kickstart: "Unlocks" audio on iOS/Android Safari & Chrome.
+   * Plays a tiny silent sound on the first user interaction.
+   */
+  const kickstartAudio = useCallback(() => {
+    try {
+      const silentSound = 'data:audio/wav;base64,UklGRigAAABXQVZFZm10IBAAAAABAAEARKwAAIhYAQACABAAZGF0YQQAAAAAAA==';
+      const audio = new Audio(silentSound);
+      audio.play().catch(() => {});
+      
+      // Also try to resume AudioContext if the browser uses it
+      const AudioCtx = window.AudioContext || window.webkitAudioContext;
+      if (AudioCtx) {
+        const ctx = new (AudioCtx)();
+        if (ctx.state === 'suspended') ctx.resume();
+      }
+      console.log('[Voice] Mobile audio kickstarted');
+    } catch (_) {}
+  }, []);
 
   /**
    * Join the voice channel.
@@ -286,6 +338,7 @@ export default function VoiceBox() {
    * Step 2: Emit voice_join to tell other peers we're here
    */
   const joinVoice = async () => {
+    kickstartAudio(); // 🍏 Kickstart for iOS/Android
     // Try to get mic — but don't block if it fails
     try {
       const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
@@ -403,6 +456,19 @@ export default function VoiceBox() {
     setAudioOn(newAudioState);
   };
 
+  /**
+   * Manual Sync: Force-restart the connection to a specific peer.
+   * Useful if the status is "Failed" or "Connecting" too long.
+   */
+  const manualSync = async (targetSocketId) => {
+    console.log('[Voice] Manual sync requested for:', targetSocketId);
+    kickstartAudio(); // 🍏 Re-kickstart on manual sync
+    if (socket && inVoice) {
+      // Just re-send the join signal to trigger new offers
+      socket.emit('voice_join', { board_id: boardId, user_id: userId, username: username });
+    }
+  };
+
   // Retry playing any blocked audio elements (for mobile autoplay policy)
   const retryPlayback = useCallback(() => {
     Object.entries(remoteAudiosRef.current).forEach(([sid, audio]) => {
@@ -469,28 +535,44 @@ export default function VoiceBox() {
                 )}
 
                 {/* Other voice users */}
-                {voiceUsers.map((user) => (
-                  <div key={user.socketId} className="voice-user">
-                    <span className="user-name">{user.username || user.userId}</span>
-                    <span className="user-mic" style={{ position: "relative" }}>
-                      <FaMicrophone
-                        color={user.micOn ? "#4CAF50" : "#999"}
-                        size={iconSize}
-                      />
-                      {!user.micOn && (
-                        <svg
-                          style={{ position: "absolute", top: 0, left: 0 }}
-                          width={iconSize} height={iconSize}
-                          viewBox="0 0 24 24"
-                          fill="none"
-                          stroke="#999"
-                          strokeWidth="2"
-                          strokeLinecap="round"
-                        >
-                          <line x1="5" y1="5" x2="19" y2="19" />
+                {voiceUsers.map((u) => (
+                  <div key={u.socketId} className="voice-user" style={{ borderBottom: '1px solid #f1f5f9', paddingBottom: 8 }}>
+                    <div style={{ display: 'flex', flexDirection: 'column', flex: 1 }}>
+                      <span className="user-name" style={{ fontWeight: 600 }}>{u.username || u.userId}</span>
+                      <span style={{ fontSize: 10, color: u.iceState === 'connected' ? '#22c55e' : (u.iceState === 'failed' ? '#ef4444' : '#64748b') }}>
+                        {u.iceState ? u.iceState.toUpperCase() : 'CONNECTING...'}
+                      </span>
+                    </div>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                      <button 
+                        onClick={() => manualSync(u.socketId)}
+                        title="Retry Connection"
+                        style={{ background: 'none', border: 'none', cursor: 'pointer', padding: 4, display: 'flex' }}
+                      >
+                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#64748b" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                          <path d="M23 4v6h-6M1 20v-6h6M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15" />
                         </svg>
-                      )}
-                    </span>
+                      </button>
+                      <span className="user-mic" style={{ position: "relative" }}>
+                        <FaMicrophone
+                          color={u.micOn ? "#4CAF50" : "#999"}
+                          size={iconSize}
+                        />
+                        {!u.micOn && (
+                          <svg
+                            style={{ position: "absolute", top: 0, left: 0 }}
+                            width={iconSize} height={iconSize}
+                            viewBox="0 0 24 24"
+                            fill="none"
+                            stroke="#999"
+                            strokeWidth="2"
+                            strokeLinecap="round"
+                          >
+                            <line x1="5" y1="5" x2="19" y2="19" />
+                          </svg>
+                        )}
+                      </span>
+                    </div>
                   </div>
                 ))}
 

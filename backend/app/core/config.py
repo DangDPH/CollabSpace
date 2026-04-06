@@ -8,9 +8,8 @@ class Settings(BaseSettings):
     ALGORITHM: str = "HS256"
     ACCESS_TOKEN_EXPIRE_MINUTES: int = 60
 
-    # CORS — comma-separated origins, or "*" to allow all
-    # For production: "https://collabspace.up.railway.app"
-    ALLOWED_ORIGINS: str = "http://localhost:5173,http://localhost,https://collabspace.up.railway.app"
+    # CORS — Set to "*" for easiest LAN/School sharing
+    ALLOWED_ORIGINS: str = "*"
 
     model_config = SettingsConfigDict(env_file=".env", extra="allow")
 

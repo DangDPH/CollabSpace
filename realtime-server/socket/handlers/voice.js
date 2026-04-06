@@ -69,6 +69,7 @@ module.exports = (io, socket) => {
     const { target_socket_id, candidate } = payload || {};
     if (!target_socket_id || !candidate) return;
 
+    console.log(`[Voice] Relay ICE Candidate from ${socket.id} -> ${target_socket_id}`);
     io.to(target_socket_id).emit(EVENTS.VOICE_ICE_CANDIDATE, {
       board_id,
       user_id,
