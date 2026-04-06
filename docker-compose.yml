@@ -1,0 +1,77 @@
+services:
+  # 🗄️ MySQL: User and Session Database
+  mysql:
+    image: mysql:8.0
+    container_name: collab_mysql
+    restart: always
+    environment:
+      MYSQL_ROOT_PASSWORD: mysecretpassword
+      MYSQL_DATABASE: collabspace_users
+    ports:
+      - "3306:3306"
+    volumes:
+      - mysql_data:/var/lib/mysql
+
+  # 📊 MongoDB: Board and Canvas Data
+  mongodb:
+    image: mongo:latest
+    container_name: collab_mongo
+    restart: always
+    environment:
+      MONGO_INITDB_ROOT_USERNAME: root
+      MONGO_INITDB_ROOT_PASSWORD: mysecretpassword
+      MONGO_INITDB_DATABASE: collabspace_boards
+    ports:
+      - "27017:27017"
+    volumes:
+      - mongo_data:/data/db
+
+  # 🐍 API: FastAPI Backend
+  backend:
+    build:
+      context: ./backend
+    container_name: collab_backend
+    restart: always
+    depends_on:
+      - mysql
+      - mongodb
+    ports:
+      - "8000:8000"
+    environment:
+      MYSQL_URI: "mysql+aiomysql://root:mysecretpassword@mysql:3306/collabspace_users"
+      MONGO_URI: "mongodb://root:mysecretpassword@mongodb:27017"
+      SECRET_KEY: "supersecretdevkey"
+      ALLOWED_ORIGINS: "*"
+
+  # ⚡ Realtime: Node.js Socket server
+  realtime:
+    build:
+      context: ./realtime-server
+    container_name: collab_realtime
+    restart: always
+    depends_on:
+      - backend
+    ports:
+      - "3000:3000"
+    environment:
+      PORT: 3000
+      BACKEND_URL: "http://backend:8000"
+
+  # 🎨 Frontend: React / Nginx
+  frontend:
+    build:
+      context: ./frontend
+      args:
+        VITE_API_URL: "http://localhost:8000"
+        VITE_SOCKET_URL: "http://localhost:3000"
+    container_name: collab_frontend
+    restart: always
+    depends_on:
+      - backend
+      - realtime
+    ports:
+      - "80:80"
+
+volumes:
+  mysql_data:
+  mongo_data:

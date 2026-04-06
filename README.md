@@ -7,85 +7,81 @@
 ## ✨ Key Features
 
 - **Unified Dashboard**: A clean and modern center to manage, create, and search through all your collaborative boards.
-- **Interactive Whiteboard**: A high-performance drawing canvas (powered by Konva) with shapes, freehand drawing, and real-time state synchronization.
-- **Rich Document Editor**: A real-time collaborative text editor (powered by Quill) for shared notes and documentation.
+- **Interactive Whiteboard**: A high-performance drawing canvas with shapes, freehand drawing, and real-time state synchronization.
+- **Rich Document Editor**: A real-time collaborative text editor for shared notes and documentation.
 - **Real-Time Voice & Chat**: Integrated WebRTC voice communication and instant messaging to keep teams connected while they work.
 - **Smart User Management**: Personalized profiles with consistent avatars and secure authentication.
-- **Responsive Design**: Optimized for both large monitors and smaller laptop screens with a standardized, premium UI.
+- **Dockerized Architecture**: Fully containerized for easy deployment and consistent performance.
 
 ---
 
-## 📋 System Requirements (Prerequisites)
+## 📋 Prerequisites
 
-Before you begin, ensure you have the following installed:
+The entire platform is now **Dockerized**. You only need one thing installed:
 
-- **Node.js**: v18.0.0 or higher
-- **Python**: v3.10.0 or higher
-- **Docker & Docker Compose**: Required for running the MongoDB and MySQL databases.
-- **Git**: For version control and cloning the repository.
-- **Web Browser**: Chrome, Edge, or Firefox (recommended for WebRTC support).
+- **Docker Desktop**: [Download here](https://www.docker.com/products/docker-desktop/)
+- **Git**: To clone the repository.
 
 ---
 
-## 🛠️ System Installation & Usage Guide (Quick Start)
+## 🛠️ Quick Start Guide
 
-Follow these steps to get CollabSpace running locally on your machine.
+Follow these steps to get CollabSpace running in under 2 minutes.
 
 ### 1. Clone the Repository
 ```bash
 git clone [YOUR_REPO_URL]
-cd [REPO_NAME]
+cd WEB
 ```
 
-### 2. Environment Setup
-
-#### **Frontend**
+### 2. Launch the Platform
+Run the following command in your terminal (at the project root):
 ```bash
-cd frontend
-npm install
-cd ..
+docker-compose up --build -d
 ```
+*This command builds the images and starts the Frontend, Backend, Real-time Server, MySQL, and MongoDB all at once.*
 
-#### **Backend & Real-time Server**
-```bash
-# Backend
-cd backend
-python -m venv .venv
-# On Windows:
-.venv\Scripts\activate
-# On macOS/Linux:
-# source .venv/bin/activate
-pip install -r requirements.txt
-cd ..
-
-# Real-time Server
-cd realtime-server
-npm install
-cd ..
-```
-
-### 3. Launching the Platform
-We have provided a unified batch file for Windows users to start all components (Docker, Python API, Node Server, and React Frontend) at once.
-
-**Simply double-click or run:**
-```bash
-start_all.bat
-```
-
-### 4. Accessing the App
-Once all terminal windows are running:
-- **Frontend**: [https://localhost:5173](https://localhost:5173)
+### 3. Access the App
+- **Frontend**: [http://localhost](http://localhost)
 - **Backend API**: `http://localhost:8000`
 - **Real-time Server**: `http://localhost:3000`
 
 > [!NOTE]
-> When you first access the site, you may see a "Your connection is not private" warning. This is expected due to the local self-signed certificate required for WebRTC. Click **Advanced -> Proceed to localhost** to enter the app.
+> Since this is a fresh Docker database, your old accounts are gone. Click **"Create Account"** to register a new user first!
 
 ---
 
-## 📦 Project Structure
+## 📦 System Architecture
 
-- `frontend/`: React source code and UI assets.
-- `backend/`: FastAPI source code and database configurations.
-- `realtime-server/`: Node.js/Socket.io logic for live collaboration and voice handlers.
-- `start_all.bat`: The main orchestrator script for local development.
+The platform is orchestrated via `docker-compose` with 5 core services:
+
+| Service | Technology | Role |
+| :--- | :--- | :--- |
+| **Frontend** | React (Vite) + Nginx | The user interface and SPA routing. |
+| **Backend** | FastAPI (Python) | REST API for users, authentication, and board logic. |
+| **Realtime** | Node.js (Socket.io) | Handles live canvas sync and WebRTC voice. |
+| **MySQL** | MySQL 8.0 | Stores user profiles and account data. |
+| **MongoDB** | MongoDB | Stores collaborative board data and canvas states. |
+
+---
+
+## ⌨️ Developer Commands
+
+Use these commands to manage your local environment:
+
+| Action | Command |
+| :--- | :--- |
+| **Stop All Services** | `docker-compose down` |
+| **Real-time Logs** | `docker-compose logs -f` |
+| **View Backend Logs** | `docker-compose logs -f backend` |
+| **Force Rebuild** | `docker-compose up --build -d` |
+| **Wipe Databases** | `docker-compose down -v` |
+
+---
+
+## 📂 Project Structure
+
+- `frontend/`: React source code and Nginx configuration.
+- `backend/`: FastAPI source code and Python dependencies.
+- `realtime-server/`: Node.js Socket.io logic.
+- `docker-compose.yml`: The main orchestration file.
